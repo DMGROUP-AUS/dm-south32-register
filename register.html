@@ -188,6 +188,14 @@ tbody td.idx{text-align:center;color:var(--ink-3);font-family:var(--mono);font-s
 td .cell{padding:6px 9px;min-height:34px;display:flex;align-items:center}
 td.client{width:calc(6ch + 18px);min-width:calc(6ch + 18px);max-width:calc(6ch + 18px)}
 td.client .cell input.txt{font-weight:700;color:var(--ink-2);text-transform:uppercase;font-size:11px;letter-spacing:.2px;text-align:center}
+td.client.area .cell{position:relative;justify-content:center;overflow:visible}
+.areatag{display:inline-flex;align-items:center;font-size:10.5px;font-weight:800;letter-spacing:.4px;padding:3px 8px;border-radius:5px;background:#eef0f2;color:var(--ink-2)}
+.areatag.empty{background:#f1f1f1;color:var(--ink-3);font-weight:600}
+.areatag.area-pf{background:#E4ECF6;color:#2f4d70}
+.areatag.area-sg{background:#E4F0E4;color:#3c6b3c}
+.areatag.area-fil{background:#F5ECD8;color:#7a5c1e}
+.areatag.area-flo{background:#E7E1F2;color:#5B4B8A}
+.area-sel{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-family:inherit}
 td.project{width:calc(61.75ch + 18px);min-width:calc(61.75ch + 18px);max-width:calc(61.75ch + 18px)}
 td.project .cell{overflow:hidden}
 td.project .cell input.txt{font-weight:700;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -247,6 +255,14 @@ td.sel input,thead th.sel input{width:15px;height:15px;cursor:pointer;accent-col
 .bulk-count{font-size:13px;color:var(--ink);font-weight:600}
 .bulk-count b{font-size:15px}
 
+tr.grouphdr td{padding:0;background:#ededed;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.grouphdr .ghinner{display:inline-flex;align-items:center;gap:9px;padding:7px 14px;cursor:pointer;position:sticky;left:0}
+.grouphdr .chev{color:var(--ink-2);transition:transform .15s;flex:none}
+.grouphdr.collapsed .chev{transform:rotate(-90deg)}
+.grouphdr .gdot{width:9px;height:9px;border-radius:2px;flex:none}
+.grouphdr .gname{font-size:11.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--ink)}
+.grouphdr .gcount{font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--ink-3)}
+.grouphdr:hover .gname{color:#000}
 tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
 
 /* ---------- Legend / footer ---------- */
@@ -352,7 +368,7 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
           <th class="sel no-print"><input type="checkbox" id="selAll" title="Select all shown"></th>
           <th class="no-print"></th>
           <th>#</th>
-          <th>Client</th>
+          <th>Area</th>
           <th>Project</th>
           <th>Description</th>
           <th class="ms pct">Shop Model</th>
@@ -391,6 +407,13 @@ const STATUS = [
 ];
 const SMAP = Object.fromEntries(STATUS.map(s=>[s.code,s]));
 /* progress weight per status — drives the overall completion bar */
+const AREAS = [
+  {code:"PF",  cls:"pf",  label:"Pastefill"},
+  {code:"SG",  cls:"sg",  label:"Secondary Grinding"},
+  {code:"FIL", cls:"fil", label:"Filters"},
+  {code:"FLO", cls:"flo", label:"Floats"},
+];
+const AMAP = Object.fromEntries(AREAS.map(a=>[a.code,a]));
 const SWEIGHT = {PEND:0, WIP:35, P1:60, IFA:80, HOLD:50, IFC:100};
 
 /* Deliverable workflow milestones (in order) */
@@ -419,7 +442,13 @@ function effectiveStatus(r){
 }
 /* Ensure milestone fields exist + migrate any legacy "status" to a manual pin */
 function normalize(r){
-  if(r.client && /^south\s*32$/i.test(r.client.trim())) r.client="S32";
+  if(r.area==null){
+    const pj=r.project||"";
+    r.area = /pastefill|paste plant|paste pump/i.test(pj) ? "PF"
+           : /secondary grinding/i.test(pj) ? "SG"
+           : /filter/i.test(pj) ? "FIL"
+           : /float|flotation/i.test(pj) ? "FLO" : "";
+  }
   MSFIELDS.forEach(k=>{ if(r[k]==null) r[k]=""; });
   PCTFIELDS.forEach(k=>{ if(r[k]==null) r[k]=""; });
   if(r.manual==null){ r.manual = (r.status && SMAP[r.status]) ? r.status : ""; }
@@ -581,6 +610,16 @@ function area(r,field){
 function autoGrow(el){ el.style.height="auto"; el.style.height=el.scrollHeight+"px"; }
 function mk(cls,node){const td=document.createElement("td");td.className=cls;const c=document.createElement("div");c.className="cell";c.appendChild(node);td.appendChild(c);return td;}
 
+function areaCell(r){
+  const td=document.createElement("td");td.className="client area";
+  const cell=document.createElement("div");cell.className="cell";
+  const code=r.area||""; const a=AMAP[code];
+  const tag=document.createElement("span");tag.className="areatag"+(a?" area-"+a.cls:" empty");tag.textContent=a?a.code:"—";tag.title=a?a.label:"Set area";
+  const sel=document.createElement("select");sel.className="area-sel";sel.dataset.f="area";
+  const blank=document.createElement("option");blank.value="";blank.textContent="— unset";if(!code)blank.selected=true;sel.appendChild(blank);
+  AREAS.forEach(o=>{const op=document.createElement("option");op.value=o.code;op.textContent=o.code+" — "+o.label;if(o.code===code)op.selected=true;sel.appendChild(op);});
+  cell.appendChild(tag);cell.appendChild(sel);td.appendChild(cell);return td;
+}
 function statusCell(r){
   const code=effectiveStatus(r); const s=SMAP[code]||STATUS[0];
   const td=document.createElement("td");td.className="status";
@@ -635,7 +674,7 @@ function buildRow(r,visualIdx){
 
   const tdIdx=document.createElement("td");tdIdx.className="idx";tdIdx.textContent=visualIdx;tr.appendChild(tdIdx);
 
-  tr.appendChild(mk("client",txt(r,"client")));
+  tr.appendChild(areaCell(r));
   tr.appendChild(mk("project",txt(r,"project")));
   tr.appendChild(mk("desc",txt(r,"desc")));
   PCTCOLS.forEach(m=>tr.appendChild(pctCell(r,m.f)));
@@ -652,6 +691,22 @@ function passFilter(r){
   return true;
 }
 
+const AREA_COLOR={pf:"#2f4d70",sg:"#3c6b3c",fil:"#7a5c1e",flo:"#5B4B8A"};
+const GKEY="dm_south32_groups_v1";
+let collapsedGroups=new Set();
+try{ const g=JSON.parse(localStorage.getItem(GKEY)); if(Array.isArray(g)) collapsedGroups=new Set(g); }catch(e){}
+function saveGroups(){ try{ localStorage.setItem(GKEY, JSON.stringify([...collapsedGroups])); }catch(e){} }
+function groupHeaderRow(code,count){
+  const a=AMAP[code]; const gkey=code||"__none"; const collapsed=collapsedGroups.has(gkey);
+  const color=a?(AREA_COLOR[a.cls]||"#8a8a8a"):"#b6b6b6";
+  const tr=document.createElement("tr");tr.className="grouphdr"+(collapsed?" collapsed":"");tr.dataset.group=gkey;
+  const td=document.createElement("td");td.colSpan=13;
+  td.innerHTML='<div class="ghinner"><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    +'<span class="gdot" style="background:'+color+'"></span>'
+    +'<span class="gname">'+(a?a.label:"Unassigned")+'</span>'
+    +'<span class="gcount">'+count+' ITEM'+(count>1?'S':'')+'</span></div>';
+  tr.appendChild(td);return tr;
+}
 function render(){
   tbody.innerHTML="";
   const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).filter(passFilter);
@@ -660,8 +715,16 @@ function render(){
     tr.innerHTML='<td colspan="13">No projects match your filters.</td>';
     tbody.appendChild(tr);updateBulk();return dashboard();
   }
+  const order=[...AREAS.map(a=>a.code),""];
+  const buckets={}; order.forEach(c=>buckets[c]=[]);
+  rows.forEach(r=>{ const c=(r.area&&AMAP[r.area])?r.area:""; buckets[c].push(r); });
   let n=0;
-  rows.forEach(r=>{n++;tbody.appendChild(buildRow(r,n));});
+  order.forEach(code=>{
+    const list=buckets[code]; if(!list.length) return;
+    const gkey=code||"__none"; const collapsed=collapsedGroups.has(gkey);
+    tbody.appendChild(groupHeaderRow(code,list.length));
+    list.forEach(r=>{ n++; if(!collapsed) tbody.appendChild(buildRow(r,n)); });
+  });
   tbody.querySelectorAll("textarea").forEach(autoGrow);
   updateBulk();
   dashboard();
@@ -721,6 +784,7 @@ tbody.addEventListener("input",e=>{
   const f=e.target.dataset.f; if(!f) return;
   const tr=e.target.closest("tr"); const r=getRow(tr.dataset.id); if(!r) return;
   r[f]=e.target.value; queueRowSave(r);
+  if(f==="area"){ const tag=tr.querySelector(".areatag"); const a=AMAP[r.area]; if(tag){ tag.className="areatag"+(a?" area-"+a.cls:" empty"); tag.textContent=a?a.code:"—"; tag.title=a?a.label:"Set area"; } }
   if(e.target.tagName==="TEXTAREA") autoGrow(e.target);
   if(e.target.dataset.pct){ const td=e.target.closest("td"), bar=td&&td.querySelector(".pctbar"); if(bar) bar.style.width=pctVal(r[f])+"%"; }
   if(MSFIELDS.includes(f)){
@@ -735,6 +799,8 @@ tbody.addEventListener("input",e=>{
   }
 });
 tbody.addEventListener("click",e=>{
+  const gh=e.target.closest(".grouphdr");
+  if(gh){ const k=gh.dataset.group; collapsedGroups.has(k)?collapsedGroups.delete(k):collapsedGroups.add(k); saveGroups(); render(); return; }
   const btn=e.target.closest(".del"); if(!btn) return;
   const tr=e.target.closest("tr"); const r=getRow(tr.dataset.id);
   if(confirm("Delete "+(r.project||"this project")+"?")){ deleteRow(r.id); render(); }
@@ -743,7 +809,7 @@ tbody.addEventListener("click",e=>{
 /* ---- add row ---- */
 document.getElementById("addRow").addEventListener("click",()=>{
   const maxPos=state.reduce((m,r)=>Math.max(m,r.pos||0),0);
-  const nr={id:"s"+Date.now(),pos:maxPos+1,client:"S32",project:"",desc:"",po:"",shopModel:"",shopDetail:"",ifaIssued:"",ifaComments:"",ifcIssued:"",manual:""};
+  const nr={id:"s"+Date.now(),pos:maxPos+1,area:"",project:"",desc:"",po:"",shopModel:"",shopDetail:"",ifaIssued:"",ifaComments:"",ifcIssued:"",manual:""};
   state.push(nr);saveRow(nr);render();
   const sc=document.querySelector(".table-scroll");sc.scrollTop=sc.scrollHeight;
 });
@@ -757,7 +823,7 @@ document.getElementById("exCsv").addEventListener("click",()=>{
   const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).map((r,i)=>{
     const code=effectiveStatus(r);
     return {
-      "#":i+1, "Client":r.client, "Project":r.project, "Description":r.desc,
+      "#":i+1, "Area":r.area||"", "Project":r.project, "Description":r.desc,
       "Shop Model %":r.shopModel||"", "Shop Detailing %":r.shopDetail||"",
       "IFA Package Issued":r.ifaIssued||"", "IFA Return Comments":r.ifaComments||"",
       "IFC Package Issued":r.ifcIssued||"",
@@ -792,7 +858,7 @@ document.getElementById("pdfBtn").addEventListener("click",()=>{
     const code=effectiveStatus(r); const s=SMAP[code]||STATUS[0]; const b=BADGE[s.cls];
     return '<tr>'
       +'<td style="text-align:center;font-weight:700">'+(i+1)+'</td>'
-      +'<td style="font-weight:700">'+esc(r.client)+'</td>'
+      +'<td style="font-weight:700;text-align:center">'+esc(r.area||"")+'</td>'
       +'<td style="font-weight:700;color:#1F3864">'+esc(r.project)+'</td>'
       +'<td>'+esc(r.desc)+'</td>'
       +'<td style="text-align:center;font-size:8px">'+(r.shopModel!==""&&r.shopModel!=null?esc(r.shopModel)+'%':'—')+'</td>'
@@ -845,7 +911,7 @@ document.getElementById("pdfBtn").addEventListener("click",()=>{
     +'<div class="sum-item"><div class="sum-label">On Hold</div><div class="sum-val" style="color:#5f5f5f">'+c.HOLD+'</div></div>'
     +'</div>'
     +'<table><thead><tr>'
-    +'<th style="width:20px">#</th><th style="width:58px">Client</th>'
+    +'<th style="width:20px">#</th><th style="width:40px;text-align:center">Area</th>'
     +'<th style="width:210px">Project</th><th>Description</th>'
     +'<th style="width:38px;text-align:center">Shop Mdl</th>'
     +'<th style="width:38px;text-align:center">Shop Det</th>'

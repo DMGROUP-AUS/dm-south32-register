@@ -82,6 +82,12 @@ tbody td{padding:7px 10px;border-bottom:1px solid var(--line-soft);font-size:12.
 tbody tr:hover{background:#f7f9fb}
 td.idx{text-align:center;color:var(--ink-3);font-family:var(--mono);font-size:11px;width:38px}
 td.client{font-weight:700;color:var(--ink-2);text-transform:uppercase;font-size:11px;text-align:center;width:calc(6ch + 18px);min-width:calc(6ch + 18px);max-width:calc(6ch + 18px)}
+.areatag{display:inline-flex;align-items:center;font-size:10.5px;font-weight:800;letter-spacing:.4px;padding:3px 8px;border-radius:5px;background:#eef0f2;color:var(--ink-2)}
+.areatag.empty{background:#f1f1f1;color:var(--ink-3);font-weight:600}
+.areatag.area-pf{background:#E4ECF6;color:#2f4d70}
+.areatag.area-sg{background:#E4F0E4;color:#3c6b3c}
+.areatag.area-fil{background:#F5ECD8;color:#7a5c1e}
+.areatag.area-flo{background:#E7E1F2;color:#5B4B8A}
 td.project{font-weight:700;color:var(--navy);width:calc(61.75ch + 18px);min-width:calc(61.75ch + 18px);max-width:calc(61.75ch + 18px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 td.desc{width:calc(58.5ch + 18px);min-width:calc(58.5ch + 18px);max-width:calc(58.5ch + 18px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 td.po{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);width:130px;min-width:130px;white-space:nowrap}
@@ -102,6 +108,14 @@ td.ms.pct{position:relative;width:70px;min-width:70px;max-width:70px}
 td.ms.pct.has{color:var(--ink);font-weight:600}
 td.ms.pct .pctbar{position:absolute;left:0;bottom:0;height:3px;background:linear-gradient(90deg,var(--accent),#8bbf6a);border-radius:0 2px 2px 0}
 table.ms-collapsed th.ms,table.ms-collapsed td.ms{display:none}
+tr.grouphdr td{padding:0;background:#ededed;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.grouphdr .ghinner{display:inline-flex;align-items:center;gap:9px;padding:7px 14px;cursor:pointer;position:sticky;left:0}
+.grouphdr .chev{color:var(--ink-2);transition:transform .15s;flex:none}
+.grouphdr.collapsed .chev{transform:rotate(-90deg)}
+.grouphdr .gdot{width:9px;height:9px;border-radius:2px;flex:none}
+.grouphdr .gname{font-size:11.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--ink)}
+.grouphdr .gcount{font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--ink-3)}
+.grouphdr:hover .gname{color:#000}
 tr.empty td{padding:40px;text-align:center;color:var(--ink-3)}
 
 .foot{max-width:1500px;margin:0 auto 60px;padding:0 22px;color:var(--ink-2);font-size:12px}
@@ -172,7 +186,7 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3)}
   <div class="table-scroll">
     <table id="viewTable">
       <thead>
-        <tr><th>#</th><th>Client</th><th>Project</th><th>Description</th><th class="ms pct">Shop Model</th><th class="ms pct">Shop Detailing</th><th class="ms">IFA Package Issued</th><th class="ms">IFA Return Comments</th><th class="ms">IFC Package Issued</th><th>Status</th><th>PO</th></tr>
+        <tr><th>#</th><th>Area</th><th>Project</th><th>Description</th><th class="ms pct">Shop Model</th><th class="ms pct">Shop Detailing</th><th class="ms">IFA Package Issued</th><th class="ms">IFA Return Comments</th><th class="ms">IFC Package Issued</th><th>Status</th><th>PO</th></tr>
       </thead>
       <tbody id="tbody"></tbody>
     </table>
@@ -195,12 +209,19 @@ const STATUS=[
   {code:"HOLD",cls:"hold",label:"On Hold"},
 ];
 const SMAP=Object.fromEntries(STATUS.map(s=>[s.code,s]));
+const AREAS = [
+  {code:"PF",  cls:"pf",  label:"Pastefill"},
+  {code:"SG",  cls:"sg",  label:"Secondary Grinding"},
+  {code:"FIL", cls:"fil", label:"Filters"},
+  {code:"FLO", cls:"flo", label:"Floats"},
+];
+const AMAP = Object.fromEntries(AREAS.map(a=>[a.code,a]));
 const SWEIGHT={PEND:0,WIP:35,P1:60,IFA:80,HOLD:50,IFC:100};
 const MILESTONES=[{f:"ifaIssued"},{f:"ifaComments"},{f:"ifcIssued"}];
 const MSFIELDS=MILESTONES.map(m=>m.f);
 function derivedStatus(r){ if(r.ifcIssued) return "IFC"; if(r.ifaComments||r.ifaIssued) return "IFA"; if(pctVal(r.shopModel)>0||pctVal(r.shopDetail)>0) return "WIP"; return "PEND"; }
 function effectiveStatus(r){ return (r.manual && SMAP[r.manual]) ? r.manual : derivedStatus(r); }
-function normalize(r){ if(r.client && /^south\s*32$/i.test(r.client.trim())) r.client="S32"; MSFIELDS.forEach(k=>{ if(r[k]==null) r[k]=""; }); ["shopModel","shopDetail"].forEach(k=>{ if(r[k]==null) r[k]=""; }); if(r.manual==null){ r.manual=(r.status&&SMAP[r.status])?r.status:""; } return r; }
+function normalize(r){ if(r.area==null){ const pj=r.project||""; r.area=/pastefill|paste plant|paste pump/i.test(pj)?"PF":/secondary grinding/i.test(pj)?"SG":/filter/i.test(pj)?"FIL":/float|flotation/i.test(pj)?"FLO":""; } MSFIELDS.forEach(k=>{ if(r[k]==null) r[k]=""; }); ["shopModel","shopDetail"].forEach(k=>{ if(r[k]==null) r[k]=""; }); if(r.manual==null){ r.manual=(r.status&&SMAP[r.status])?r.status:""; } return r; }
 function fmtD(d){ if(!d) return "—"; const p=String(d).split("-"); return p.length===3?p[2]+"/"+p[1]+"/"+p[0].slice(2):"—"; }
 function pctVal(v){ v=parseInt(v,10); return isNaN(v)?0:Math.max(0,Math.min(100,v)); }
 
@@ -225,26 +246,52 @@ function passFilter(r){
   if(!statusFilter.has(effectiveStatus(r))) return false;
   return true;
 }
+const AREA_COLOR={pf:"#2f4d70",sg:"#3c6b3c",fil:"#7a5c1e",flo:"#5B4B8A"};
+const GKEY="dm_south32_vgroups_v1";
+let collapsedGroups=new Set();
+try{ const g=JSON.parse(localStorage.getItem(GKEY)); if(Array.isArray(g)) collapsedGroups=new Set(g); }catch(e){}
+function saveGroups(){ try{ localStorage.setItem(GKEY, JSON.stringify([...collapsedGroups])); }catch(e){} }
+function rowHTML(r,idx){
+  const code=effectiveStatus(r); const s=SMAP[code]||STATUS[0];
+  const dc=f=>'<td class="ms'+(r[f]?' done':'')+'">'+fmtD(r[f])+'</td>';
+  const a=AMAP[r.area]; const areaTag='<span class="areatag'+(a?' area-'+a.cls:' empty')+'" title="'+(a?esc(a.label):'')+'">'+(a?esc(a.code):'—')+'</span>';
+  const pc=f=>{const v=(r[f]==null||r[f]==="")?"":r[f];return '<td class="ms pct'+(v!==""?' has':'')+'">'+(v!==""?esc(v)+'%':'—')+'<i class="pctbar" style="width:'+pctVal(v)+'%"></i></td>';};
+  return '<tr>'
+    +'<td class="idx">'+idx+'</td>'
+    +'<td class="client area">'+areaTag+'</td>'
+    +'<td class="project" title="'+esc(r.project)+'">'+esc(r.project)+'</td>'
+    +'<td class="desc" title="'+esc(r.desc)+'">'+esc(r.desc)+'</td>'
+    +pc('shopModel')+pc('shopDetail')
+    +dc('ifaIssued')+dc('ifaComments')+dc('ifcIssued')
+    +'<td class="status"><span class="pill '+s.cls+'" title="'+esc(s.label)+(r.manual?' — manual override':' — from workflow')+'">'+esc(code)+'</span></td>'
+    +'<td class="po">'+esc(r.po)+'</td>'
+    +'</tr>';
+}
 function render(){
   const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).filter(passFilter);
   if(!rows.length){ tbody.innerHTML='<tr class="empty"><td colspan="11">No projects match your filters.</td></tr>'; return dashboard(); }
-  tbody.innerHTML=rows.map((r,i)=>{
-    const code=effectiveStatus(r); const s=SMAP[code]||STATUS[0];
-    const dc=f=>'<td class="ms'+(r[f]?' done':'')+'">'+fmtD(r[f])+'</td>';
-    const pc=f=>{const v=(r[f]==null||r[f]==="")?"":r[f];return '<td class="ms pct'+(v!==""?' has':'')+'">'+(v!==""?esc(v)+'%':'—')+'<i class="pctbar" style="width:'+pctVal(v)+'%"></i></td>';};
-    return '<tr>'
-      +'<td class="idx">'+(i+1)+'</td>'
-      +'<td class="client">'+esc(r.client)+'</td>'
-      +'<td class="project" title="'+esc(r.project)+'">'+esc(r.project)+'</td>'
-      +'<td class="desc" title="'+esc(r.desc)+'">'+esc(r.desc)+'</td>'
-      +pc('shopModel')+pc('shopDetail')
-      +dc('ifaIssued')+dc('ifaComments')+dc('ifcIssued')
-      +'<td class="status"><span class="pill '+s.cls+'" title="'+esc(s.label)+(r.manual?' — manual override':' — from workflow')+'">'+esc(code)+'</span></td>'
-      +'<td class="po">'+esc(r.po)+'</td>'
-      +'</tr>';
-  }).join("");
+  const order=[...AREAS.map(a=>a.code),""];
+  const buckets={}; order.forEach(c=>buckets[c]=[]);
+  rows.forEach(r=>{ const c=(r.area&&AMAP[r.area])?r.area:""; buckets[c].push(r); });
+  let html="", n=0;
+  order.forEach(code=>{
+    const list=buckets[code]; if(!list.length) return;
+    const a=AMAP[code]; const gkey=code||"__none"; const collapsed=collapsedGroups.has(gkey);
+    const color=a?(AREA_COLOR[a.cls]||"#8a8a8a"):"#b6b6b6";
+    html+='<tr class="grouphdr'+(collapsed?' collapsed':'')+'" data-group="'+gkey+'"><td colspan="11"><div class="ghinner">'
+      +'<svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+      +'<span class="gdot" style="background:'+color+'"></span>'
+      +'<span class="gname">'+(a?esc(a.label):"Unassigned")+'</span>'
+      +'<span class="gcount">'+list.length+' ITEM'+(list.length>1?'S':'')+'</span></div></td></tr>';
+    if(!collapsed){ list.forEach(r=>{ n++; html+=rowHTML(r,n); }); } else { n+=list.length; }
+  });
+  tbody.innerHTML=html;
   dashboard();
 }
+tbody.addEventListener("click",e=>{
+  const gh=e.target.closest(".grouphdr"); if(!gh) return;
+  const k=gh.dataset.group; collapsedGroups.has(k)?collapsedGroups.delete(k):collapsedGroups.add(k); saveGroups(); render();
+});
 function dashboard(){
   const counts={PEND:0,WIP:0,P1:0,IFA:0,IFC:0,HOLD:0}; let sum=0;
   state.forEach(r=>{const c=effectiveStatus(r);counts[c]=(counts[c]||0)+1;sum+=(SWEIGHT[c]||0);});
@@ -299,7 +346,7 @@ document.getElementById("exCsv").addEventListener("click",()=>{
   if(!state.length) return;
   const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).map((r,i)=>{
     const code=effectiveStatus(r);
-    return {"#":i+1,"Client":r.client,"Project":r.project,"Description":r.desc,
+    return {"#":i+1,"Area":r.area||"","Project":r.project,"Description":r.desc,
       "Shop Model %":r.shopModel||"","Shop Detailing %":r.shopDetail||"",
       "IFA Package Issued":r.ifaIssued||"","IFA Return Comments":r.ifaComments||"",
       "IFC Package Issued":r.ifcIssued||"",
