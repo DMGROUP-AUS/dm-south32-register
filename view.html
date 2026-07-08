@@ -94,6 +94,10 @@ td.status{width:110px}
 thead th.ms{white-space:normal;line-height:1.15;text-align:center;padding:8px 6px;font-size:9.5px;width:100px;min-width:100px;max-width:100px}
 td.ms{width:100px;min-width:100px;max-width:100px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--ink-2);background:#f7f9fb}
 td.ms.done{background:#eef7ef;color:var(--ink)}
+thead th.ms.pct{width:92px;min-width:92px;max-width:92px}
+td.ms.pct{position:relative;width:92px;min-width:92px;max-width:92px}
+td.ms.pct.has{color:var(--ink);font-weight:600}
+td.ms.pct .pctbar{position:absolute;left:0;bottom:0;height:3px;background:linear-gradient(90deg,var(--accent),#8bbf6a);border-radius:0 2px 2px 0}
 table.ms-collapsed th.ms,table.ms-collapsed td.ms{display:none}
 tr.empty td{padding:40px;text-align:center;color:var(--ink-3)}
 
@@ -156,7 +160,7 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3)}
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     <input id="q" placeholder="Search project, description or PO…">
   </div>
-  <button class="btn" id="msToggle"><i class="ti ti-arrows-diagonal-minimize-2"></i>Collapse dates</button>
+  <button class="btn" id="msToggle"><i class="ti ti-arrows-diagonal-minimize-2"></i>Collapse workflow</button>
   <button class="btn" id="exCsv"><i class="ti ti-file-spreadsheet"></i>Excel</button>
   <button class="btn primary" id="printBtn"><i class="ti ti-printer"></i>Print / PDF</button>
 </section>
@@ -165,7 +169,7 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3)}
   <div class="table-scroll">
     <table id="viewTable">
       <thead>
-        <tr><th>#</th><th>Client</th><th>Project</th><th>Description</th><th class="ms">IFA Package Issued</th><th class="ms">IFA Return Comments</th><th class="ms">IFC Package Issued</th><th>Status</th><th>PO</th></tr>
+        <tr><th>#</th><th>Client</th><th>Project</th><th>Description</th><th class="ms pct">Shop Model</th><th class="ms pct">Shop Detailing</th><th class="ms">IFA Package Issued</th><th class="ms">IFA Return Comments</th><th class="ms">IFC Package Issued</th><th>Status</th><th>PO</th></tr>
       </thead>
       <tbody id="tbody"></tbody>
     </table>
@@ -192,8 +196,9 @@ const MILESTONES=[{f:"ifaIssued"},{f:"ifaComments"},{f:"ifcIssued"}];
 const MSFIELDS=MILESTONES.map(m=>m.f);
 function derivedStatus(r){ if(r.ifcIssued) return "IFC"; if(r.ifaComments||r.ifaIssued) return "IFA"; return "WIP"; }
 function effectiveStatus(r){ return (r.manual && SMAP[r.manual]) ? r.manual : derivedStatus(r); }
-function normalize(r){ MSFIELDS.forEach(k=>{ if(r[k]==null) r[k]=""; }); if(r.manual==null){ r.manual=(r.status&&SMAP[r.status])?r.status:""; } return r; }
+function normalize(r){ MSFIELDS.forEach(k=>{ if(r[k]==null) r[k]=""; }); ["shopModel","shopDetail"].forEach(k=>{ if(r[k]==null) r[k]=""; }); if(r.manual==null){ r.manual=(r.status&&SMAP[r.status])?r.status:""; } return r; }
 function fmtD(d){ return d?new Date(d+"T00:00").toLocaleDateString("en-AU",{day:"2-digit",month:"short",year:"2-digit"}):"—"; }
+function pctVal(v){ v=parseInt(v,10); return isNaN(v)?0:Math.max(0,Math.min(100,v)); }
 
 const SUPABASE_URL="https://xabzlhdqozvibpjgkxws.supabase.co";
 const SUPABASE_KEY="sb_publishable_xG7KPvVEIlV9h7EYR9IgmA_ZPqyy-AO";
@@ -218,15 +223,17 @@ function passFilter(r){
 }
 function render(){
   const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).filter(passFilter);
-  if(!rows.length){ tbody.innerHTML='<tr class="empty"><td colspan="9">No projects match your filters.</td></tr>'; return dashboard(); }
+  if(!rows.length){ tbody.innerHTML='<tr class="empty"><td colspan="11">No projects match your filters.</td></tr>'; return dashboard(); }
   tbody.innerHTML=rows.map((r,i)=>{
     const code=effectiveStatus(r); const s=SMAP[code]||STATUS[0];
     const dc=f=>'<td class="ms'+(r[f]?' done':'')+'">'+fmtD(r[f])+'</td>';
+    const pc=f=>{const v=(r[f]==null||r[f]==="")?"":r[f];return '<td class="ms pct'+(v!==""?' has':'')+'">'+(v!==""?esc(v)+'%':'—')+'<i class="pctbar" style="width:'+pctVal(v)+'%"></i></td>';};
     return '<tr>'
       +'<td class="idx">'+(i+1)+'</td>'
       +'<td class="client">'+esc(r.client)+'</td>'
       +'<td class="project">'+esc(r.project)+'</td>'
       +'<td class="desc">'+esc(r.desc)+'</td>'
+      +pc('shopModel')+pc('shopDetail')
       +dc('ifaIssued')+dc('ifaComments')+dc('ifcIssued')
       +'<td class="status"><span class="pill '+s.cls+'" title="'+esc(s.label)+(r.manual?' — manual override':' — from workflow')+'">'+esc(code)+'</span></td>'
       +'<td class="po">'+esc(r.po)+'</td>'
@@ -288,12 +295,13 @@ document.getElementById("exCsv").addEventListener("click",()=>{
   const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).map((r,i)=>{
     const code=effectiveStatus(r);
     return {"#":i+1,"Client":r.client,"Project":r.project,"Description":r.desc,
+      "Shop Model %":r.shopModel||"","Shop Detailing %":r.shopDetail||"",
       "IFA Package Issued":r.ifaIssued||"","IFA Return Comments":r.ifaComments||"",
       "IFC Package Issued":r.ifcIssued||"",
       "Status":code,"Status (full)":(SMAP[code]||{}).label||"","PO":r.po};
   });
   const ws=XLSX.utils.json_to_sheet(rows);
-  ws["!cols"]=[{wch:5},{wch:11},{wch:50},{wch:56},{wch:17},{wch:16},{wch:8},{wch:24},{wch:13}];
+  ws["!cols"]=[{wch:5},{wch:11},{wch:50},{wch:56},{wch:12},{wch:14},{wch:16},{wch:17},{wch:16},{wch:8},{wch:24},{wch:13}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,"South32 Register");
   XLSX.writeFile(wb,"South32_Tracking_Register_"+tstamp()+".xlsx");
@@ -307,8 +315,8 @@ document.getElementById("msToggle").addEventListener("click",()=>{
   msCollapsed=!msCollapsed;
   viewTable.classList.toggle("ms-collapsed",msCollapsed);
   document.getElementById("msToggle").innerHTML = msCollapsed
-    ? '<i class="ti ti-arrows-diagonal"></i>Show dates'
-    : '<i class="ti ti-arrows-diagonal-minimize-2"></i>Collapse dates';
+    ? '<i class="ti ti-arrows-diagonal"></i>Show workflow'
+    : '<i class="ti ti-arrows-diagonal-minimize-2"></i>Collapse workflow';
 });
 buildLegend();wireStatusFilter();
 

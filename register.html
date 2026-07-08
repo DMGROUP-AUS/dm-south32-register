@@ -217,6 +217,14 @@ td.ms.done{background:#eef7ef}
 td.ms .datecell{padding:5px 8px}
 td.ms .datecell input{border:none;background:transparent;font-family:var(--mono);font-size:11.5px;color:var(--ink);width:100%;cursor:pointer}
 td.ms .datecell input:focus{outline:none}
+thead th.ms.pct{width:96px;min-width:96px;max-width:96px}
+td.ms.pct{position:relative;width:96px;min-width:96px;max-width:96px}
+td.ms.pct .pctcell{padding:5px 9px;display:flex;align-items:center;gap:1px}
+td.ms.pct .pctcell input{border:none;background:transparent;font-family:var(--mono);font-size:11.5px;color:var(--ink);flex:1;min-width:0;text-align:right;-moz-appearance:textfield}
+td.ms.pct .pctcell input::-webkit-outer-spin-button,td.ms.pct .pctcell input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+td.ms.pct .pctcell input:focus{outline:none}
+td.ms.pct .pctcell::after{content:"%";font-size:10px;color:var(--ink-3);font-family:var(--mono)}
+td.ms.pct .pctbar{position:absolute;left:0;bottom:0;height:3px;background:linear-gradient(90deg,var(--accent),#8bbf6a);border-radius:0 2px 2px 0}
 table.ms-collapsed th.ms,table.ms-collapsed td.ms{display:none}
 
 /* delete */
@@ -305,7 +313,7 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     <input id="q" placeholder="Search project, description or PO…">
   </div>
-  <button class="btn" id="msToggle"><i class="ti ti-arrows-diagonal-minimize-2"></i>Collapse dates</button>
+  <button class="btn" id="msToggle"><i class="ti ti-arrows-diagonal-minimize-2"></i>Collapse workflow</button>
   <button class="btn" id="addRow"><i class="ti ti-plus"></i>Add project</button>
   <button class="btn" id="exCsv"><i class="ti ti-file-spreadsheet"></i>Excel</button>
   <button class="btn primary" id="pdfBtn"><i class="ti ti-file-type-pdf"></i>Client PDF</button>
@@ -341,6 +349,8 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
           <th>Client</th>
           <th>Project</th>
           <th>Description</th>
+          <th class="ms pct">Shop Model</th>
+          <th class="ms pct">Shop Detailing</th>
           <th class="ms">IFA Package Issued</th>
           <th class="ms">IFA Return Comments</th>
           <th class="ms">IFC Package Issued</th>
@@ -383,6 +393,12 @@ const MILESTONES = [
   {f:"ifcIssued",  label:"IFC Package Issued"},
 ];
 const MSFIELDS = MILESTONES.map(m=>m.f);
+const PCTCOLS = [
+  {f:"shopModel", label:"Shop Model"},
+  {f:"shopDetail",label:"Shop Detailing"},
+];
+const PCTFIELDS = PCTCOLS.map(m=>m.f);
+function pctVal(v){ v=parseInt(v,10); return isNaN(v)?0:Math.max(0,Math.min(100,v)); }
 
 /* Status is derived from the workflow dates; a manual value overrides it. */
 function derivedStatus(r){
@@ -396,6 +412,7 @@ function effectiveStatus(r){
 /* Ensure milestone fields exist + migrate any legacy "status" to a manual pin */
 function normalize(r){
   MSFIELDS.forEach(k=>{ if(r[k]==null) r[k]=""; });
+  PCTFIELDS.forEach(k=>{ if(r[k]==null) r[k]=""; });
   if(r.manual==null){ r.manual = (r.status && SMAP[r.status]) ? r.status : ""; }
   delete r.status;
   return r;
@@ -428,6 +445,7 @@ function seed(){
   return RAW.map((r,i)=>({
     id:"s"+(i+1), pos:i,
     client:r[0], project:r[1], desc:r[2], po:r[4],
+    shopModel:"", shopDetail:"",
     ifaIssued:"", ifaComments:"", ifcIssued:"",
     manual:r[3]   // current status pinned as manual until real dates are entered
   }));
@@ -573,6 +591,14 @@ function dateCell(r,field){
   const i=document.createElement("input");i.type="date";i.value=r[field]||"";i.dataset.f=field;
   c.appendChild(i);td.appendChild(c);return td;
 }
+function pctCell(r,field){
+  const td=document.createElement("td");td.className="ms pct";
+  const c=document.createElement("div");c.className="pctcell";
+  const i=document.createElement("input");i.type="number";i.min="0";i.max="100";i.step="5";
+  i.value=(r[field]==null?"":r[field]);i.dataset.f=field;i.dataset.pct="1";i.placeholder="0";
+  const bar=document.createElement("i");bar.className="pctbar";bar.style.width=pctVal(r[field])+"%";
+  c.appendChild(i);td.appendChild(c);td.appendChild(bar);return td;
+}
 
 function buildRow(r,visualIdx){
   const tr=document.createElement("tr");tr.dataset.id=r.id;
@@ -590,6 +616,7 @@ function buildRow(r,visualIdx){
   tr.appendChild(mk("client",txt(r,"client")));
   tr.appendChild(mk("project",txt(r,"project")));
   tr.appendChild(mk("desc",area(r,"desc")));
+  PCTCOLS.forEach(m=>tr.appendChild(pctCell(r,m.f)));
   MILESTONES.forEach(m=>tr.appendChild(dateCell(r,m.f)));
   tr.appendChild(statusCell(r));
   tr.appendChild(mk("po",txt(r,"po")));
@@ -608,7 +635,7 @@ function render(){
   const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).filter(passFilter);
   if(!rows.length){
     const tr=document.createElement("tr");tr.className="empty";
-    tr.innerHTML='<td colspan="11">No projects match your filters.</td>';
+    tr.innerHTML='<td colspan="13">No projects match your filters.</td>';
     tbody.appendChild(tr);updateBulk();return dashboard();
   }
   let n=0;
@@ -672,6 +699,7 @@ tbody.addEventListener("input",e=>{
   const tr=e.target.closest("tr"); const r=getRow(tr.dataset.id); if(!r) return;
   r[f]=e.target.value; queueRowSave(r);
   if(e.target.tagName==="TEXTAREA") autoGrow(e.target);
+  if(e.target.dataset.pct){ const td=e.target.closest("td"), bar=td&&td.querySelector(".pctbar"); if(bar) bar.style.width=pctVal(r[f])+"%"; }
   if(MSFIELDS.includes(f)){
     const td=e.target.closest("td"); if(td) td.classList.toggle("done", !!r[f]);
   }
@@ -692,7 +720,7 @@ tbody.addEventListener("click",e=>{
 /* ---- add row ---- */
 document.getElementById("addRow").addEventListener("click",()=>{
   const maxPos=state.reduce((m,r)=>Math.max(m,r.pos||0),0);
-  const nr={id:"s"+Date.now(),pos:maxPos+1,client:document.getElementById("pClient").value.toUpperCase()||"SOUTH 32",project:"",desc:"",po:"",ifaIssued:"",ifaComments:"",ifcIssued:"",manual:""};
+  const nr={id:"s"+Date.now(),pos:maxPos+1,client:document.getElementById("pClient").value.toUpperCase()||"SOUTH 32",project:"",desc:"",po:"",shopModel:"",shopDetail:"",ifaIssued:"",ifaComments:"",ifcIssued:"",manual:""};
   state.push(nr);saveRow(nr);render();
   const sc=document.querySelector(".table-scroll");sc.scrollTop=sc.scrollHeight;
 });
@@ -707,6 +735,7 @@ document.getElementById("exCsv").addEventListener("click",()=>{
     const code=effectiveStatus(r);
     return {
       "#":i+1, "Client":r.client, "Project":r.project, "Description":r.desc,
+      "Shop Model %":r.shopModel||"", "Shop Detailing %":r.shopDetail||"",
       "IFA Package Issued":r.ifaIssued||"", "IFA Return Comments":r.ifaComments||"",
       "IFC Package Issued":r.ifcIssued||"",
       "Status":code, "Status (full)":(SMAP[code]||{}).label||"",
@@ -714,7 +743,7 @@ document.getElementById("exCsv").addEventListener("click",()=>{
     };
   });
   const ws=XLSX.utils.json_to_sheet(rows);
-  ws["!cols"]=[{wch:5},{wch:11},{wch:50},{wch:56},{wch:16},{wch:17},{wch:16},{wch:8},{wch:24},{wch:13},{wch:13}];
+  ws["!cols"]=[{wch:5},{wch:11},{wch:50},{wch:56},{wch:12},{wch:14},{wch:16},{wch:17},{wch:16},{wch:8},{wch:24},{wch:13},{wch:13}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,"South32 Register");
   XLSX.writeFile(wb,"South32_Tracking_Register_"+tstamp()+".xlsx");
@@ -743,6 +772,8 @@ document.getElementById("pdfBtn").addEventListener("click",()=>{
       +'<td style="font-weight:700">'+esc(r.client)+'</td>'
       +'<td style="font-weight:700;color:#1F3864">'+esc(r.project)+'</td>'
       +'<td>'+esc(r.desc)+'</td>'
+      +'<td style="text-align:center;font-size:8px">'+(r.shopModel!==""&&r.shopModel!=null?esc(r.shopModel)+'%':'—')+'</td>'
+      +'<td style="text-align:center;font-size:8px">'+(r.shopDetail!==""&&r.shopDetail!=null?esc(r.shopDetail)+'%':'—')+'</td>'
       +'<td style="text-align:center;font-size:8px">'+fmtD(r.ifaIssued)+'</td>'
       +'<td style="text-align:center;font-size:8px">'+fmtD(r.ifaComments)+'</td>'
       +'<td style="text-align:center;font-size:8px">'+fmtD(r.ifcIssued)+'</td>'
@@ -792,6 +823,8 @@ document.getElementById("pdfBtn").addEventListener("click",()=>{
     +'<table><thead><tr>'
     +'<th style="width:20px">#</th><th style="width:58px">Client</th>'
     +'<th style="width:210px">Project</th><th>Description</th>'
+    +'<th style="width:38px;text-align:center">Shop Mdl</th>'
+    +'<th style="width:38px;text-align:center">Shop Det</th>'
     +'<th style="width:46px;text-align:center">IFA Iss</th>'
     +'<th style="width:46px;text-align:center">IFA Ret</th>'
     +'<th style="width:46px;text-align:center">IFC Iss</th>'
@@ -825,8 +858,8 @@ document.getElementById("msToggle").addEventListener("click",()=>{
   msCollapsed=!msCollapsed;
   regTable.classList.toggle("ms-collapsed",msCollapsed);
   document.getElementById("msToggle").innerHTML = msCollapsed
-    ? '<i class="ti ti-arrows-diagonal"></i>Show dates'
-    : '<i class="ti ti-arrows-diagonal-minimize-2"></i>Collapse dates';
+    ? '<i class="ti ti-arrows-diagonal"></i>Show workflow'
+    : '<i class="ti ti-arrows-diagonal-minimize-2"></i>Collapse workflow';
 });
 projFields.forEach(id=>document.getElementById(id).addEventListener("input",queueMetaSave));
 
