@@ -206,6 +206,16 @@ td.status{width:150px}
 .pill.ifc{color:var(--s-ifc);background:var(--s-ifc-bg)}
 .pill.hold{color:var(--s-hold);background:var(--s-hold-bg)}
 .status-sel{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-family:inherit}
+.status-wrap .lockdot{position:absolute;top:3px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--ink-2);opacity:0;pointer-events:none;box-shadow:0 0 0 2px #fff}
+.status-wrap.manual .lockdot{opacity:.85}
+/* ---------- Milestone date columns (collapsible) ---------- */
+thead th.ms{white-space:normal;line-height:1.15;text-align:center;padding:8px 6px;font-size:9.5px;width:116px;min-width:116px;max-width:116px}
+td.ms{width:116px;min-width:116px;max-width:116px;background:#f7f9fb}
+td.ms.done{background:#eef7ef}
+td.ms .datecell{padding:5px 8px}
+td.ms .datecell input{border:none;background:transparent;font-family:var(--mono);font-size:11.5px;color:var(--ink);width:100%;cursor:pointer}
+td.ms .datecell input:focus{outline:none}
+table.ms-collapsed th.ms,table.ms-collapsed td.ms{display:none}
 
 /* delete */
 td.act{width:34px}
@@ -276,6 +286,7 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
     <input id="q" placeholder="Search project, description or PO…">
   </div>
   <select class="filter" id="fStatus"><option value="">All statuses</option></select>
+  <button class="btn" id="msToggle"><i class="ti ti-arrows-diagonal-minimize-2"></i>Collapse dates</button>
   <button class="btn" id="addRow"><i class="ti ti-plus"></i>Add project</button>
   <button class="btn" id="exCsv"><i class="ti ti-file-spreadsheet"></i>Excel</button>
   <button class="btn primary" id="pdfBtn"><i class="ti ti-file-type-pdf"></i>Client PDF</button>
@@ -284,7 +295,7 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
 <!-- ===================== TABLE ===================== -->
 <section class="table-wrap">
   <div class="table-scroll">
-    <table>
+    <table id="regTable">
       <thead>
         <tr>
           <th class="no-print"></th>
@@ -292,6 +303,10 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
           <th>Client</th>
           <th>Project</th>
           <th>Description</th>
+          <th class="ms">Received Project Info</th>
+          <th class="ms">IFA Package Issued</th>
+          <th class="ms">IFA Return Comments</th>
+          <th class="ms">IFC Package Issued</th>
           <th>Status</th>
           <th>PO</th>
         </tr>
@@ -324,6 +339,32 @@ const SMAP = Object.fromEntries(STATUS.map(s=>[s.code,s]));
 /* progress weight per status — drives the overall completion bar */
 const SWEIGHT = {WIP:35, P1:60, IFA:80, HOLD:50, IFC:100};
 
+/* Deliverable workflow milestones (in order) */
+const MILESTONES = [
+  {f:"rxInfo",     label:"Received Project Info"},
+  {f:"ifaIssued",  label:"IFA Package Issued"},
+  {f:"ifaComments",label:"IFA Return Comments"},
+  {f:"ifcIssued",  label:"IFC Package Issued"},
+];
+const MSFIELDS = MILESTONES.map(m=>m.f);
+
+/* Status is derived from the workflow dates; a manual value overrides it. */
+function derivedStatus(r){
+  if(r.ifcIssued) return "IFC";
+  if(r.ifaComments || r.ifaIssued) return "IFA";
+  return "WIP";                 // project info / PO received, or nothing yet
+}
+function effectiveStatus(r){
+  return (r.manual && SMAP[r.manual]) ? r.manual : derivedStatus(r);
+}
+/* Ensure milestone fields exist + migrate any legacy "status" to a manual pin */
+function normalize(r){
+  MSFIELDS.forEach(k=>{ if(r[k]==null) r[k]=""; });
+  if(r.manual==null){ r.manual = (r.status && SMAP[r.status]) ? r.status : ""; }
+  delete r.status;
+  return r;
+}
+
 /* ============================================================
    SEED DATA — South32 Cannington register (from issued sheet)
    ============================================================ */
@@ -350,7 +391,9 @@ const RAW = [
 function seed(){
   return RAW.map((r,i)=>({
     id:"s"+(i+1), pos:i,
-    client:r[0], project:r[1], desc:r[2], status:r[3], po:r[4]
+    client:r[0], project:r[1], desc:r[2], po:r[4],
+    rxInfo:"", ifaIssued:"", ifaComments:"", ifcIssued:"",
+    manual:r[3]   // current status pinned as manual until real dates are entered
   }));
 }
 
@@ -394,6 +437,7 @@ let saved = store.load();
 let state = (saved && saved.rows) ? saved.rows : seed();
 let meta  = (saved && saved.meta) ? saved.meta : {};
 state.forEach((r,i)=>{ if(r.pos==null) r.pos=i; });
+state.forEach(normalize);
 
 /* ============================================================
    SAVE  ——  routes to Supabase (cloud) or localStorage (local)
@@ -468,14 +512,23 @@ function txt(r,field,cls){
 function mk(cls,node){const td=document.createElement("td");td.className=cls;const c=document.createElement("div");c.className="cell";c.appendChild(node);td.appendChild(c);return td;}
 
 function statusCell(r){
-  const s=SMAP[r.status]||STATUS[0];
+  const code=effectiveStatus(r); const s=SMAP[code]||STATUS[0];
   const td=document.createElement("td");td.className="status";
-  const wrap=document.createElement("div");wrap.className="status-wrap";
-  const pill=document.createElement("span");pill.className="pill "+s.cls;pill.textContent=s.code;pill.title=s.label;
-  const sel=document.createElement("select");sel.className="status-sel";sel.dataset.f="status";
-  STATUS.forEach(o=>{const op=document.createElement("option");op.value=o.code;op.textContent=o.code+" — "+o.label;if(o.code===r.status)op.selected=true;sel.appendChild(op);});
-  wrap.appendChild(pill);wrap.appendChild(sel);td.appendChild(wrap);
+  const wrap=document.createElement("div");wrap.className="status-wrap"+(r.manual?" manual":"");
+  const pill=document.createElement("span");pill.className="pill "+s.cls;pill.textContent=s.code;
+  pill.title=s.label+(r.manual?" — manual override":" — from workflow");
+  const dot=document.createElement("span");dot.className="lockdot";dot.title="Manual override (pinned)";
+  const sel=document.createElement("select");sel.className="status-sel";sel.dataset.f="manual";
+  const auto=document.createElement("option");auto.value="";auto.textContent="Auto (from workflow)";if(!r.manual)auto.selected=true;sel.appendChild(auto);
+  STATUS.forEach(o=>{const op=document.createElement("option");op.value=o.code;op.textContent=o.code+" — "+o.label+(o.code==="HOLD"||o.code==="P1"?"":" (manual)");if(o.code===r.manual)op.selected=true;sel.appendChild(op);});
+  wrap.appendChild(pill);wrap.appendChild(dot);wrap.appendChild(sel);td.appendChild(wrap);
   return td;
+}
+function dateCell(r,field){
+  const td=document.createElement("td");td.className="ms"+(r[field]?" done":"");
+  const c=document.createElement("div");c.className="datecell";
+  const i=document.createElement("input");i.type="date";i.value=r[field]||"";i.dataset.f=field;
+  c.appendChild(i);td.appendChild(c);return td;
 }
 
 function buildRow(r,visualIdx){
@@ -490,6 +543,7 @@ function buildRow(r,visualIdx){
   tr.appendChild(mk("client",txt(r,"client")));
   tr.appendChild(mk("project",txt(r,"project")));
   tr.appendChild(mk("desc",txt(r,"desc")));
+  MILESTONES.forEach(m=>tr.appendChild(dateCell(r,m.f)));
   tr.appendChild(statusCell(r));
   tr.appendChild(mk("po",txt(r,"po")));
   return tr;
@@ -498,7 +552,7 @@ function buildRow(r,visualIdx){
 function passFilter(r){
   const term=q.value.trim().toLowerCase();
   if(term && !((r.project+" "+r.desc+" "+r.po).toLowerCase().includes(term))) return false;
-  if(fStatus.value && r.status!==fStatus.value) return false;
+  if(fStatus.value && effectiveStatus(r)!==fStatus.value) return false;
   return true;
 }
 
@@ -507,7 +561,7 @@ function render(){
   const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).filter(passFilter);
   if(!rows.length){
     const tr=document.createElement("tr");tr.className="empty";
-    tr.innerHTML='<td colspan="7">No projects match your filters.</td>';
+    tr.innerHTML='<td colspan="11">No projects match your filters.</td>';
     tbody.appendChild(tr);return dashboard();
   }
   let n=0;
@@ -519,7 +573,7 @@ function render(){
 function dashboard(){
   const counts={WIP:0,P1:0,IFA:0,IFC:0,HOLD:0};
   let sum=0;
-  state.forEach(r=>{counts[r.status]=(counts[r.status]||0)+1;sum+=(SWEIGHT[r.status]||0);});
+  state.forEach(r=>{const c=effectiveStatus(r);counts[c]=(counts[c]||0)+1;sum+=(SWEIGHT[c]||0);});
   const overall=state.length?Math.round(sum/state.length):0;
   document.getElementById("dash").innerHTML=`
     <div class="stat"><div class="n">${state.length}</div><div class="l">Total projects</div></div>
@@ -544,9 +598,14 @@ tbody.addEventListener("input",e=>{
   const f=e.target.dataset.f; if(!f) return;
   const tr=e.target.closest("tr"); const r=getRow(tr.dataset.id); if(!r) return;
   r[f]=e.target.value; queueRowSave(r);
-  if(f==="status"){
-    const s=SMAP[r.status]||STATUS[0];
-    const pill=tr.querySelector(".pill"); if(pill){pill.className="pill "+s.cls;pill.textContent=s.code;pill.title=s.label;}
+  if(MSFIELDS.includes(f)){
+    const td=e.target.closest("td"); if(td) td.classList.toggle("done", !!r[f]);
+  }
+  if(f==="manual" || MSFIELDS.includes(f)){
+    const code=effectiveStatus(r); const s=SMAP[code]||STATUS[0];
+    const wrap=tr.querySelector(".status-wrap"), pill=tr.querySelector(".pill");
+    if(pill){pill.className="pill "+s.cls;pill.textContent=s.code;pill.title=s.label+(r.manual?" — manual override":" — from workflow");}
+    if(wrap){wrap.classList.toggle("manual", !!r.manual);}
     dashboard();
   }
 });
@@ -559,7 +618,7 @@ tbody.addEventListener("click",e=>{
 /* ---- add row ---- */
 document.getElementById("addRow").addEventListener("click",()=>{
   const maxPos=state.reduce((m,r)=>Math.max(m,r.pos||0),0);
-  const nr={id:"s"+Date.now(),pos:maxPos+1,client:document.getElementById("pClient").value.toUpperCase()||"SOUTH 32",project:"",desc:"",status:"WIP",po:""};
+  const nr={id:"s"+Date.now(),pos:maxPos+1,client:document.getElementById("pClient").value.toUpperCase()||"SOUTH 32",project:"",desc:"",po:"",rxInfo:"",ifaIssued:"",ifaComments:"",ifcIssued:"",manual:""};
   state.push(nr);saveRow(nr);render();
   const sc=document.querySelector(".table-scroll");sc.scrollTop=sc.scrollHeight;
 });
@@ -570,12 +629,19 @@ document.getElementById("addRow").addEventListener("click",()=>{
 function tstamp(){return new Date().toISOString().slice(0,16).replace("T","_").replace(":","");}
 document.getElementById("exCsv").addEventListener("click",()=>{
   if(!state.length){toast("Nothing to export");return;}
-  const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).map((r,i)=>({
-    "#":i+1, "Client":r.client, "Project":r.project, "Description":r.desc,
-    "Status":r.status, "Status (full)":(SMAP[r.status]||{}).label||"", "PO":r.po
-  }));
+  const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).map((r,i)=>{
+    const code=effectiveStatus(r);
+    return {
+      "#":i+1, "Client":r.client, "Project":r.project, "Description":r.desc,
+      "Received Project Info":r.rxInfo||"",
+      "IFA Package Issued":r.ifaIssued||"", "IFA Return Comments":r.ifaComments||"",
+      "IFC Package Issued":r.ifcIssued||"",
+      "Status":code, "Status (full)":(SMAP[code]||{}).label||"",
+      "Status Source":r.manual?"Manual":"Workflow", "PO":r.po
+    };
+  });
   const ws=XLSX.utils.json_to_sheet(rows);
-  ws["!cols"]=[{wch:5},{wch:11},{wch:52},{wch:60},{wch:8},{wch:24},{wch:14}];
+  ws["!cols"]=[{wch:5},{wch:11},{wch:50},{wch:56},{wch:16},{wch:16},{wch:17},{wch:16},{wch:8},{wch:24},{wch:13},{wch:13}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,"South32 Register");
   XLSX.writeFile(wb,"South32_Tracking_Register_"+tstamp()+".xlsx");
@@ -593,17 +659,22 @@ document.getElementById("pdfBtn").addEventListener("click",()=>{
   const M=collectMeta();
   const now=new Date();
   const printedAt=now.toLocaleDateString("en-AU",{day:"2-digit",month:"long",year:"numeric"})+" "+now.toLocaleTimeString("en-AU",{hour:"2-digit",minute:"2-digit",hour12:true});
-  const c={WIP:0,P1:0,IFA:0,IFC:0,HOLD:0}; state.forEach(r=>c[r.status]=(c[r.status]||0)+1);
+  const c={WIP:0,P1:0,IFA:0,IFC:0,HOLD:0}; state.forEach(r=>{const k=effectiveStatus(r);c[k]=(c[k]||0)+1;});
+  const fmtD=d=>d?new Date(d+"T00:00").toLocaleDateString("en-AU",{day:"2-digit",month:"short",year:"2-digit"}):"—";
   const ordered=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0));
 
   const rows=ordered.map((r,i)=>{
-    const s=SMAP[r.status]||STATUS[0]; const b=BADGE[s.cls];
+    const code=effectiveStatus(r); const s=SMAP[code]||STATUS[0]; const b=BADGE[s.cls];
     return '<tr>'
       +'<td style="text-align:center;font-weight:700">'+(i+1)+'</td>'
       +'<td style="font-weight:700">'+esc(r.client)+'</td>'
       +'<td style="font-weight:700;color:#1F3864">'+esc(r.project)+'</td>'
       +'<td>'+esc(r.desc)+'</td>'
-      +'<td style="text-align:center"><span class="badge" style="background:'+b[0]+';color:'+b[1]+'">'+esc(r.status)+'</span></td>'
+      +'<td style="text-align:center;font-size:8px">'+fmtD(r.rxInfo)+'</td>'
+      +'<td style="text-align:center;font-size:8px">'+fmtD(r.ifaIssued)+'</td>'
+      +'<td style="text-align:center;font-size:8px">'+fmtD(r.ifaComments)+'</td>'
+      +'<td style="text-align:center;font-size:8px">'+fmtD(r.ifcIssued)+'</td>'
+      +'<td style="text-align:center"><span class="badge" style="background:'+b[0]+';color:'+b[1]+'">'+esc(code)+'</span></td>'
       +'<td style="font-family:monospace;text-align:center">'+esc(r.po)+'</td>'
       +'</tr>';
   }).join("");
@@ -647,9 +718,13 @@ document.getElementById("pdfBtn").addEventListener("click",()=>{
     +'<div class="sum-item"><div class="sum-label">On Hold</div><div class="sum-val" style="color:#5f5f5f">'+c.HOLD+'</div></div>'
     +'</div>'
     +'<table><thead><tr>'
-    +'<th style="width:24px">#</th><th style="width:70px">Client</th>'
-    +'<th style="width:300px">Project</th><th>Description</th>'
-    +'<th style="width:70px;text-align:center">Status</th><th style="width:90px;text-align:center">PO</th>'
+    +'<th style="width:20px">#</th><th style="width:58px">Client</th>'
+    +'<th style="width:210px">Project</th><th>Description</th>'
+    +'<th style="width:46px;text-align:center">Rx Info</th>'
+    +'<th style="width:46px;text-align:center">IFA Iss</th>'
+    +'<th style="width:46px;text-align:center">IFA Ret</th>'
+    +'<th style="width:46px;text-align:center">IFC Iss</th>'
+    +'<th style="width:56px;text-align:center">Status</th><th style="width:78px;text-align:center">PO</th>'
     +'</tr></thead><tbody>'+rows+'</tbody></table>'
     +'<div class="footer"><span>DM Group — Confidential — South32 '+esc(M.pSite||"Cannington")+'</span><span>dm-group.com.au &nbsp;·&nbsp; BUILD IT BETTER!</span></div>'
     +'<scr'+'ipt>window.onload=function(){window.print();}<\/scr'+'ipt>'
@@ -674,6 +749,15 @@ function toast(msg){
    ============================================================ */
 STATUS.forEach(s=>{const o=document.createElement("option");o.value=s.code;o.textContent=s.code+" — "+s.label;fStatus.appendChild(o);});
 [q,fStatus].forEach(el=>el.addEventListener("input",render));
+const regTable=document.getElementById("regTable");
+let msCollapsed=false;
+document.getElementById("msToggle").addEventListener("click",()=>{
+  msCollapsed=!msCollapsed;
+  regTable.classList.toggle("ms-collapsed",msCollapsed);
+  document.getElementById("msToggle").innerHTML = msCollapsed
+    ? '<i class="ti ti-arrows-diagonal"></i>Show dates'
+    : '<i class="ti ti-arrows-diagonal-minimize-2"></i>Collapse dates';
+});
 projFields.forEach(id=>document.getElementById(id).addEventListener("input",queueMetaSave));
 
 if(meta&&Object.keys(meta).length){projFields.forEach(id=>{if(meta[id]!=null)document.getElementById(id).value=meta[id];});}
@@ -698,7 +782,7 @@ async function cloudLoad(){
     await sb.from(TABLE).upsert({id:META_ID,pos:-1,data:{...collectMeta(),_v:META_V},updated_at:new Date().toISOString()},{onConflict:"id"});
     setSync("ok"); return;
   }
-  state = data.filter(r=>r.id!==META_ID).map(r=>({...r.data, id:r.id, pos:r.pos}));
+  state = data.filter(r=>r.id!==META_ID).map(r=>normalize({...r.data, id:r.id, pos:r.pos}));
   const metaRow=data.find(r=>r.id===META_ID);
   persistLocal();
   if(metaRow) applyMeta(metaRow.data||{});
@@ -718,7 +802,7 @@ function onRemote(payload){
   if(payload.eventType==="DELETE"){
     state=state.filter(x=>x.id!==id);
   }else{
-    const rec={...payload.new.data, id, pos:payload.new.pos};
+    const rec=normalize({...payload.new.data, id, pos:payload.new.pos});
     const i=state.findIndex(x=>x.id===id);
     if(i>=0) state[i]=rec; else state.push(rec);
   }

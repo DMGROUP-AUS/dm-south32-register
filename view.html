@@ -91,6 +91,10 @@ td.status{width:110px}
 .pill.ifa{color:var(--s-ifa);background:var(--s-ifa-bg)}
 .pill.ifc{color:var(--s-ifc);background:var(--s-ifc-bg)}
 .pill.hold{color:var(--s-hold);background:var(--s-hold-bg)}
+thead th.ms{white-space:normal;line-height:1.15;text-align:center;padding:8px 6px;font-size:9.5px;width:100px;min-width:100px;max-width:100px}
+td.ms{width:100px;min-width:100px;max-width:100px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--ink-2);background:#f7f9fb}
+td.ms.done{background:#eef7ef;color:var(--ink)}
+table.ms-collapsed th.ms,table.ms-collapsed td.ms{display:none}
 tr.empty td{padding:40px;text-align:center;color:var(--ink-3)}
 
 .foot{max-width:1500px;margin:0 auto 60px;padding:0 22px;color:var(--ink-2);font-size:12px}
@@ -143,15 +147,16 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3)}
     <input id="q" placeholder="Search project, description or PO…">
   </div>
   <select class="filter" id="fStatus"><option value="">All statuses</option></select>
+  <button class="btn" id="msToggle"><i class="ti ti-arrows-diagonal-minimize-2"></i>Collapse dates</button>
   <button class="btn" id="exCsv"><i class="ti ti-file-spreadsheet"></i>Excel</button>
   <button class="btn primary" id="printBtn"><i class="ti ti-printer"></i>Print / PDF</button>
 </section>
 
 <section class="table-wrap">
   <div class="table-scroll">
-    <table>
+    <table id="viewTable">
       <thead>
-        <tr><th>#</th><th>Client</th><th>Project</th><th>Description</th><th>Status</th><th>PO</th></tr>
+        <tr><th>#</th><th>Client</th><th>Project</th><th>Description</th><th class="ms">Received Project Info</th><th class="ms">IFA Package Issued</th><th class="ms">IFA Return Comments</th><th class="ms">IFC Package Issued</th><th>Status</th><th>PO</th></tr>
       </thead>
       <tbody id="tbody"></tbody>
     </table>
@@ -174,6 +179,12 @@ const STATUS=[
 ];
 const SMAP=Object.fromEntries(STATUS.map(s=>[s.code,s]));
 const SWEIGHT={WIP:35,P1:60,IFA:80,HOLD:50,IFC:100};
+const MILESTONES=[{f:"rxInfo"},{f:"ifaIssued"},{f:"ifaComments"},{f:"ifcIssued"}];
+const MSFIELDS=MILESTONES.map(m=>m.f);
+function derivedStatus(r){ if(r.ifcIssued) return "IFC"; if(r.ifaComments||r.ifaIssued) return "IFA"; return "WIP"; }
+function effectiveStatus(r){ return (r.manual && SMAP[r.manual]) ? r.manual : derivedStatus(r); }
+function normalize(r){ MSFIELDS.forEach(k=>{ if(r[k]==null) r[k]=""; }); if(r.manual==null){ r.manual=(r.status&&SMAP[r.status])?r.status:""; } return r; }
+function fmtD(d){ return d?new Date(d+"T00:00").toLocaleDateString("en-AU",{day:"2-digit",month:"short",year:"2-digit"}):"—"; }
 
 const SUPABASE_URL="https://xabzlhdqozvibpjgkxws.supabase.co";
 const SUPABASE_KEY="sb_publishable_xG7KPvVEIlV9h7EYR9IgmA_ZPqyy-AO";
@@ -192,20 +203,22 @@ function esc(s){return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g
 function passFilter(r){
   const term=q.value.trim().toLowerCase();
   if(term && !((r.project+" "+r.desc+" "+r.po).toLowerCase().includes(term))) return false;
-  if(fStatus.value && r.status!==fStatus.value) return false;
+  if(fStatus.value && effectiveStatus(r)!==fStatus.value) return false;
   return true;
 }
 function render(){
   const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).filter(passFilter);
-  if(!rows.length){ tbody.innerHTML='<tr class="empty"><td colspan="6">No projects match your filters.</td></tr>'; return dashboard(); }
+  if(!rows.length){ tbody.innerHTML='<tr class="empty"><td colspan="10">No projects match your filters.</td></tr>'; return dashboard(); }
   tbody.innerHTML=rows.map((r,i)=>{
-    const s=SMAP[r.status]||STATUS[0];
+    const code=effectiveStatus(r); const s=SMAP[code]||STATUS[0];
+    const dc=f=>'<td class="ms'+(r[f]?' done':'')+'">'+fmtD(r[f])+'</td>';
     return '<tr>'
       +'<td class="idx">'+(i+1)+'</td>'
       +'<td class="client">'+esc(r.client)+'</td>'
       +'<td class="project">'+esc(r.project)+'</td>'
       +'<td class="desc">'+esc(r.desc)+'</td>'
-      +'<td class="status"><span class="pill '+s.cls+'" title="'+esc(s.label)+'">'+esc(s.code)+'</span></td>'
+      +dc('rxInfo')+dc('ifaIssued')+dc('ifaComments')+dc('ifcIssued')
+      +'<td class="status"><span class="pill '+s.cls+'" title="'+esc(s.label)+(r.manual?' — manual override':' — from workflow')+'">'+esc(code)+'</span></td>'
       +'<td class="po">'+esc(r.po)+'</td>'
       +'</tr>';
   }).join("");
@@ -213,7 +226,7 @@ function render(){
 }
 function dashboard(){
   const counts={WIP:0,P1:0,IFA:0,IFC:0,HOLD:0}; let sum=0;
-  state.forEach(r=>{counts[r.status]=(counts[r.status]||0)+1;sum+=(SWEIGHT[r.status]||0);});
+  state.forEach(r=>{const c=effectiveStatus(r);counts[c]=(counts[c]||0)+1;sum+=(SWEIGHT[c]||0);});
   const overall=state.length?Math.round(sum/state.length):0;
   document.getElementById("dash").innerHTML=`
     <div class="stat"><div class="n">${state.length}</div><div class="l">Total projects</div></div>
@@ -238,12 +251,16 @@ function applyMeta(m){
 function tstamp(){return new Date().toISOString().slice(0,16).replace("T","_").replace(":","");}
 document.getElementById("exCsv").addEventListener("click",()=>{
   if(!state.length) return;
-  const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).map((r,i)=>({
-    "#":i+1,"Client":r.client,"Project":r.project,"Description":r.desc,
-    "Status":r.status,"Status (full)":(SMAP[r.status]||{}).label||"","PO":r.po
-  }));
+  const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).map((r,i)=>{
+    const code=effectiveStatus(r);
+    return {"#":i+1,"Client":r.client,"Project":r.project,"Description":r.desc,
+      "Received Project Info":r.rxInfo||"",
+      "IFA Package Issued":r.ifaIssued||"","IFA Return Comments":r.ifaComments||"",
+      "IFC Package Issued":r.ifcIssued||"",
+      "Status":code,"Status (full)":(SMAP[code]||{}).label||"","PO":r.po};
+  });
   const ws=XLSX.utils.json_to_sheet(rows);
-  ws["!cols"]=[{wch:5},{wch:11},{wch:52},{wch:60},{wch:8},{wch:24},{wch:14}];
+  ws["!cols"]=[{wch:5},{wch:11},{wch:50},{wch:56},{wch:16},{wch:16},{wch:17},{wch:16},{wch:8},{wch:24},{wch:13}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,"South32 Register");
   XLSX.writeFile(wb,"South32_Tracking_Register_"+tstamp()+".xlsx");
@@ -251,6 +268,15 @@ document.getElementById("exCsv").addEventListener("click",()=>{
 document.getElementById("printBtn").addEventListener("click",()=>window.print());
 
 [q,fStatus].forEach(el=>el.addEventListener("input",render));
+const viewTable=document.getElementById("viewTable");
+let msCollapsed=false;
+document.getElementById("msToggle").addEventListener("click",()=>{
+  msCollapsed=!msCollapsed;
+  viewTable.classList.toggle("ms-collapsed",msCollapsed);
+  document.getElementById("msToggle").innerHTML = msCollapsed
+    ? '<i class="ti ti-arrows-diagonal"></i>Show dates'
+    : '<i class="ti ti-arrows-diagonal-minimize-2"></i>Collapse dates';
+});
 STATUS.forEach(s=>{const o=document.createElement("option");o.value=s.code;o.textContent=s.code+" — "+s.label;fStatus.appendChild(o);});
 buildLegend();
 
@@ -258,7 +284,7 @@ async function load(){
   if(!sb){ render(); return; }
   const {data,error}=await sb.from(TABLE).select("*").order("pos",{ascending:true});
   if(error){ render(); return; }
-  state=data.filter(r=>r.id!==META_ID).map(r=>({...r.data,id:r.id,pos:r.pos}));
+  state=data.filter(r=>r.id!==META_ID).map(r=>normalize({...r.data,id:r.id,pos:r.pos}));
   const metaRow=data.find(r=>r.id===META_ID);
   if(metaRow) applyMeta(metaRow.data||{});
   document.getElementById("lastUpdated").textContent="Updated "+new Date().toLocaleString("en-AU",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
@@ -273,7 +299,7 @@ if(sb){
       if(row.id===META_ID){ if(payload.new) applyMeta(payload.new.data); return; }
       if(payload.eventType==="DELETE") state=state.filter(x=>x.id!==row.id);
       else{
-        const rec={...payload.new.data,id:row.id,pos:payload.new.pos};
+        const rec=normalize({...payload.new.data,id:row.id,pos:payload.new.pos});
         const i=state.findIndex(x=>x.id===row.id);
         if(i>=0) state[i]=rec; else state.push(rec);
       }
