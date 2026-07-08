@@ -82,8 +82,8 @@ tbody td{padding:7px 10px;border-bottom:1px solid var(--line-soft);font-size:12.
 tbody tr:hover{background:#f7f9fb}
 td.idx{text-align:center;color:var(--ink-3);font-family:var(--mono);font-size:11px;width:38px}
 td.client{font-weight:700;color:var(--ink-2);text-transform:uppercase;font-size:11px;text-align:center;width:calc(6ch + 18px);min-width:calc(6ch + 18px);max-width:calc(6ch + 18px)}
-td.project{font-weight:700;color:var(--navy);width:calc(65ch + 18px);min-width:calc(65ch + 18px);max-width:calc(65ch + 18px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-td.desc{width:calc(65ch + 18px);min-width:calc(65ch + 18px);max-width:calc(65ch + 18px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+td.project{font-weight:700;color:var(--navy);width:calc(61.75ch + 18px);min-width:calc(61.75ch + 18px);max-width:calc(61.75ch + 18px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+td.desc{width:calc(58.5ch + 18px);min-width:calc(58.5ch + 18px);max-width:calc(58.5ch + 18px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 td.po{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);width:130px;min-width:130px;white-space:nowrap}
 td.status{width:110px}
 .pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;padding:4px 12px;border-radius:20px;white-space:nowrap;letter-spacing:.4px}
@@ -94,8 +94,8 @@ td.status{width:110px}
 .pill.ifc{color:var(--s-ifc);background:var(--s-ifc-bg)}
 .pill.hold{color:var(--s-hold);background:var(--s-hold-bg)}
 .pill.pend{color:var(--s-pend);background:var(--s-pend-bg)}
-thead th.ms{white-space:normal;line-height:1.15;text-align:center;padding:8px 6px;font-size:9.5px;width:100px;min-width:100px;max-width:100px}
-td.ms{width:100px;min-width:100px;max-width:100px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--ink-2);background:#f7f9fb}
+thead th.ms{white-space:normal;line-height:1.15;text-align:center;padding:8px 6px;font-size:9.5px;width:84px;min-width:84px;max-width:84px}
+td.ms{width:84px;min-width:84px;max-width:84px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--ink-2);background:#f7f9fb}
 td.ms.done{background:#eef7ef;color:var(--ink)}
 thead th.ms.pct{width:70px;min-width:70px;max-width:70px;white-space:normal}
 td.ms.pct{position:relative;width:70px;min-width:70px;max-width:70px}
@@ -201,7 +201,7 @@ const MSFIELDS=MILESTONES.map(m=>m.f);
 function derivedStatus(r){ if(r.ifcIssued) return "IFC"; if(r.ifaComments||r.ifaIssued) return "IFA"; if(pctVal(r.shopModel)>0||pctVal(r.shopDetail)>0) return "WIP"; return "PEND"; }
 function effectiveStatus(r){ return (r.manual && SMAP[r.manual]) ? r.manual : derivedStatus(r); }
 function normalize(r){ if(r.client && /^south\s*32$/i.test(r.client.trim())) r.client="S32"; MSFIELDS.forEach(k=>{ if(r[k]==null) r[k]=""; }); ["shopModel","shopDetail"].forEach(k=>{ if(r[k]==null) r[k]=""; }); if(r.manual==null){ r.manual=(r.status&&SMAP[r.status])?r.status:""; } return r; }
-function fmtD(d){ return d?new Date(d+"T00:00").toLocaleDateString("en-AU",{day:"2-digit",month:"short",year:"2-digit"}):"—"; }
+function fmtD(d){ if(!d) return "—"; const p=String(d).split("-"); return p.length===3?p[2]+"/"+p[1]+"/"+p[0].slice(2):"—"; }
 function pctVal(v){ v=parseInt(v,10); return isNaN(v)?0:Math.max(0,Math.min(100,v)); }
 
 const SUPABASE_URL="https://xabzlhdqozvibpjgkxws.supabase.co";
