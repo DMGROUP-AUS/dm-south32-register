@@ -80,8 +80,8 @@ tbody td{padding:7px 10px;border-bottom:1px solid var(--line-soft);font-size:12.
 tbody tr:hover{background:#f7f9fb}
 td.idx{text-align:center;color:var(--ink-3);font-family:var(--mono);font-size:11px;width:38px}
 td.client{font-weight:700;color:var(--ink-2);text-transform:uppercase;font-size:11.5px;min-width:96px}
-td.project{font-weight:700;color:var(--navy);min-width:300px}
-td.desc{min-width:320px}
+td.project{font-weight:700;color:var(--navy);min-width:460px}
+td.desc{min-width:300px;max-width:480px;white-space:normal;word-break:break-word}
 td.po{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);width:120px}
 td.status{width:110px}
 .pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;padding:4px 12px;border-radius:20px;white-space:nowrap;letter-spacing:.4px}
@@ -99,7 +99,17 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3)}
 
 .foot{max-width:1500px;margin:0 auto 60px;padding:0 22px;color:var(--ink-2);font-size:12px}
 .foot strong{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-3);margin-bottom:8px}
-.legend{display:flex;gap:8px;flex-wrap:wrap}
+.legend{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filter-chip{display:inline-flex;align-items:center;gap:7px;background:transparent;border:none;border-radius:22px;padding:3px 6px 3px 3px;cursor:pointer;font-family:inherit;transition:.12s}
+.filter-chip .box{width:15px;height:15px;border:1.5px solid var(--line);border-radius:4px;flex:none;position:relative;background:#fff;transition:.12s}
+.filter-chip.on .box{background:var(--brand);border-color:var(--brand)}
+.filter-chip.on .box::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid var(--accent);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.filter-chip:hover{background:#f1f1f1}
+.filter-chip.dim{opacity:.38}
+.filter-chip .pill{cursor:pointer}
+.reset-chip{display:none;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:22px;padding:5px 12px;font-family:inherit;font-size:12px;font-weight:700;color:var(--ink-2);cursor:pointer;margin-left:2px}
+.reset-chip.show{display:inline-flex}
+.reset-chip:hover{border-color:var(--ink-3);background:#fafafa;color:var(--ink)}
 
 @media print{
   .no-print{display:none!important}
@@ -146,7 +156,6 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3)}
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     <input id="q" placeholder="Search project, description or PO…">
   </div>
-  <select class="filter" id="fStatus"><option value="">All statuses</option></select>
   <button class="btn" id="msToggle"><i class="ti ti-arrows-diagonal-minimize-2"></i>Collapse dates</button>
   <button class="btn" id="exCsv"><i class="ti ti-file-spreadsheet"></i>Excel</button>
   <button class="btn primary" id="printBtn"><i class="ti ti-printer"></i>Print / PDF</button>
@@ -156,7 +165,7 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3)}
   <div class="table-scroll">
     <table id="viewTable">
       <thead>
-        <tr><th>#</th><th>Client</th><th>Project</th><th>Description</th><th class="ms">Received Project Info</th><th class="ms">IFA Package Issued</th><th class="ms">IFA Return Comments</th><th class="ms">IFC Package Issued</th><th>Status</th><th>PO</th></tr>
+        <tr><th>#</th><th>Client</th><th>Project</th><th>Description</th><th class="ms">IFA Package Issued</th><th class="ms">IFA Return Comments</th><th class="ms">IFC Package Issued</th><th>Status</th><th>PO</th></tr>
       </thead>
       <tbody id="tbody"></tbody>
     </table>
@@ -164,7 +173,7 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3)}
 </section>
 
 <div class="foot no-print">
-  <strong>Status legend</strong>
+  <strong>Filter by status</strong>
   <div class="legend" id="legend"></div>
   <p style="margin-top:12px">This is a live read-only view. It updates automatically as DM Group progresses each project.</p>
 </div>
@@ -179,7 +188,7 @@ const STATUS=[
 ];
 const SMAP=Object.fromEntries(STATUS.map(s=>[s.code,s]));
 const SWEIGHT={WIP:35,P1:60,IFA:80,HOLD:50,IFC:100};
-const MILESTONES=[{f:"rxInfo"},{f:"ifaIssued"},{f:"ifaComments"},{f:"ifcIssued"}];
+const MILESTONES=[{f:"ifaIssued"},{f:"ifaComments"},{f:"ifcIssued"}];
 const MSFIELDS=MILESTONES.map(m=>m.f);
 function derivedStatus(r){ if(r.ifcIssued) return "IFC"; if(r.ifaComments||r.ifaIssued) return "IFA"; return "WIP"; }
 function effectiveStatus(r){ return (r.manual && SMAP[r.manual]) ? r.manual : derivedStatus(r); }
@@ -196,19 +205,20 @@ if(window.supabase){ try{ sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_
 
 let state=[];
 const tbody=document.getElementById("tbody");
-const q=document.getElementById("q"), fStatus=document.getElementById("fStatus");
+const q=document.getElementById("q");
+const statusFilter=new Set(STATUS.map(s=>s.code));
 
 function esc(s){return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 
 function passFilter(r){
   const term=q.value.trim().toLowerCase();
   if(term && !((r.project+" "+r.desc+" "+r.po).toLowerCase().includes(term))) return false;
-  if(fStatus.value && effectiveStatus(r)!==fStatus.value) return false;
+  if(!statusFilter.has(effectiveStatus(r))) return false;
   return true;
 }
 function render(){
   const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).filter(passFilter);
-  if(!rows.length){ tbody.innerHTML='<tr class="empty"><td colspan="10">No projects match your filters.</td></tr>'; return dashboard(); }
+  if(!rows.length){ tbody.innerHTML='<tr class="empty"><td colspan="9">No projects match your filters.</td></tr>'; return dashboard(); }
   tbody.innerHTML=rows.map((r,i)=>{
     const code=effectiveStatus(r); const s=SMAP[code]||STATUS[0];
     const dc=f=>'<td class="ms'+(r[f]?' done':'')+'">'+fmtD(r[f])+'</td>';
@@ -217,7 +227,7 @@ function render(){
       +'<td class="client">'+esc(r.client)+'</td>'
       +'<td class="project">'+esc(r.project)+'</td>'
       +'<td class="desc">'+esc(r.desc)+'</td>'
-      +dc('rxInfo')+dc('ifaIssued')+dc('ifaComments')+dc('ifcIssued')
+      +dc('ifaIssued')+dc('ifaComments')+dc('ifcIssued')
       +'<td class="status"><span class="pill '+s.cls+'" title="'+esc(s.label)+(r.manual?' — manual override':' — from workflow')+'">'+esc(code)+'</span></td>'
       +'<td class="po">'+esc(r.po)+'</td>'
       +'</tr>';
@@ -238,7 +248,31 @@ function dashboard(){
     <div class="stat progress"><div class="n">${overall}%<small>overall completion</small></div><div class="bar"><i style="width:${overall}%"></i></div></div>`;
 }
 function buildLegend(){
-  document.getElementById("legend").innerHTML=STATUS.map(s=>`<span class="pill ${s.cls}">${s.code} — ${s.label}</span>`).join("");
+  const wrap=document.getElementById("legend"); wrap.innerHTML="";
+  STATUS.forEach(s=>{
+    const b=document.createElement("button"); b.type="button"; b.className="filter-chip"; b.dataset.code=s.code;
+    b.innerHTML='<span class="box"></span><span class="pill '+s.cls+'">'+s.code+' — '+s.label+'</span>';
+    wrap.appendChild(b);
+  });
+  const rst=document.createElement("button"); rst.type="button"; rst.id="resetFilters"; rst.className="reset-chip";
+  rst.innerHTML='<i class="ti ti-filter-off"></i>Reset filters'; wrap.appendChild(rst);
+  updateFilterUI();
+}
+function updateFilterUI(){
+  const filtering=statusFilter.size<STATUS.length;
+  document.querySelectorAll("#legend .filter-chip").forEach(c=>{
+    const on=statusFilter.has(c.dataset.code);
+    c.classList.toggle("on",on); c.classList.toggle("dim",!on);
+  });
+  const rst=document.getElementById("resetFilters");
+  if(rst) rst.classList.toggle("show", filtering || (q.value.trim()!==""));
+}
+function wireStatusFilter(){
+  document.getElementById("legend").addEventListener("click",e=>{
+    const chip=e.target.closest(".filter-chip");
+    if(chip){ const code=chip.dataset.code; statusFilter.has(code)?statusFilter.delete(code):statusFilter.add(code); updateFilterUI(); render(); return; }
+    if(e.target.closest("#resetFilters")){ STATUS.forEach(s=>statusFilter.add(s.code)); q.value=""; updateFilterUI(); render(); }
+  });
 }
 function applyMeta(m){
   if(!m) return;
@@ -254,20 +288,19 @@ document.getElementById("exCsv").addEventListener("click",()=>{
   const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).map((r,i)=>{
     const code=effectiveStatus(r);
     return {"#":i+1,"Client":r.client,"Project":r.project,"Description":r.desc,
-      "Received Project Info":r.rxInfo||"",
       "IFA Package Issued":r.ifaIssued||"","IFA Return Comments":r.ifaComments||"",
       "IFC Package Issued":r.ifcIssued||"",
       "Status":code,"Status (full)":(SMAP[code]||{}).label||"","PO":r.po};
   });
   const ws=XLSX.utils.json_to_sheet(rows);
-  ws["!cols"]=[{wch:5},{wch:11},{wch:50},{wch:56},{wch:16},{wch:16},{wch:17},{wch:16},{wch:8},{wch:24},{wch:13}];
+  ws["!cols"]=[{wch:5},{wch:11},{wch:50},{wch:56},{wch:17},{wch:16},{wch:8},{wch:24},{wch:13}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,"South32 Register");
   XLSX.writeFile(wb,"South32_Tracking_Register_"+tstamp()+".xlsx");
 });
 document.getElementById("printBtn").addEventListener("click",()=>window.print());
 
-[q,fStatus].forEach(el=>el.addEventListener("input",render));
+q.addEventListener("input",()=>{updateFilterUI();render();});
 const viewTable=document.getElementById("viewTable");
 let msCollapsed=false;
 document.getElementById("msToggle").addEventListener("click",()=>{
@@ -277,8 +310,7 @@ document.getElementById("msToggle").addEventListener("click",()=>{
     ? '<i class="ti ti-arrows-diagonal"></i>Show dates'
     : '<i class="ti ti-arrows-diagonal-minimize-2"></i>Collapse dates';
 });
-STATUS.forEach(s=>{const o=document.createElement("option");o.value=s.code;o.textContent=s.code+" — "+s.label;fStatus.appendChild(o);});
-buildLegend();
+buildLegend();wireStatusFilter();
 
 async function load(){
   if(!sb){ render(); return; }

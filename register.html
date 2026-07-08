@@ -186,13 +186,15 @@ tbody td.idx{text-align:center;color:var(--ink-3);font-family:var(--mono);font-s
 td .cell{padding:6px 9px;min-height:34px;display:flex;align-items:center}
 td.client{min-width:96px}
 td.client .cell input.txt{font-weight:700;color:var(--ink-2);text-transform:uppercase;font-size:11.5px;letter-spacing:.3px}
-td.project{min-width:300px}
+td.project{min-width:460px}
 td.project .cell input.txt{font-weight:700;color:var(--navy)}
-td.desc{min-width:320px}
+td.desc{min-width:300px;max-width:480px}
+td.desc .cell{align-items:flex-start}
+td.desc textarea.txt{resize:none;overflow:hidden;line-height:1.35;white-space:pre-wrap;word-break:break-word;min-height:20px}
 td.po{width:120px}
 td.po .cell input.txt{font-family:var(--mono);font-size:11.5px;color:var(--ink-2)}
-td .cell input.txt{border:none;background:transparent;font-family:inherit;font-size:12.5px;color:var(--ink);width:100%;padding:0}
-td .cell input.txt:focus{outline:none}
+td .cell input.txt,td .cell textarea.txt{border:none;background:transparent;font-family:inherit;font-size:12.5px;color:var(--ink);width:100%;padding:0}
+td .cell input.txt:focus,td .cell textarea.txt:focus{outline:none}
 
 /* status pill + select */
 td.status{width:150px}
@@ -222,13 +224,31 @@ td.act{width:34px}
 .del{width:26px;height:26px;margin:0 auto;display:grid;place-items:center;border:1px solid var(--line);border-radius:5px;
   background:#f5f5f5;color:var(--ink-3);cursor:pointer}
 .del:hover{background:#fdecea;color:#c0392b;border-color:#f5c0b8}
+/* ---------- Row select + bulk bar ---------- */
+td.sel,thead th.sel{width:32px;text-align:center;padding:0}
+td.sel input,thead th.sel input{width:15px;height:15px;cursor:pointer;accent-color:var(--brand);margin:0}
+.bulkbar{max-width:1500px;margin:12px auto 0;padding:0 22px;display:flex}
+.bulkbar[hidden]{display:none}
+.bulkbar-inner{flex:1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--accent-soft);border:1px solid var(--accent-dark);border-radius:var(--radius);padding:9px 14px}
+.bulk-count{font-size:13px;color:var(--ink);font-weight:600}
+.bulk-count b{font-size:15px}
 
 tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
 
 /* ---------- Legend / footer ---------- */
 .foot{max-width:1500px;margin:0 auto 60px;padding:0 22px;color:var(--ink-2);font-size:12px}
 .foot strong{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-3);margin-bottom:8px}
-.legend{display:flex;gap:8px;flex-wrap:wrap}
+.legend{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filter-chip{display:inline-flex;align-items:center;gap:7px;background:transparent;border:none;border-radius:22px;padding:3px 6px 3px 3px;cursor:pointer;font-family:inherit;transition:.12s}
+.filter-chip .box{width:15px;height:15px;border:1.5px solid var(--line);border-radius:4px;flex:none;position:relative;background:#fff;transition:.12s}
+.filter-chip.on .box{background:var(--brand);border-color:var(--brand)}
+.filter-chip.on .box::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid var(--accent);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.filter-chip:hover{background:#f1f1f1}
+.filter-chip.dim{opacity:.38}
+.filter-chip .pill{cursor:pointer}
+.reset-chip{display:none;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:22px;padding:5px 12px;font-family:inherit;font-size:12px;font-weight:700;color:var(--ink-2);cursor:pointer;margin-left:2px}
+.reset-chip.show{display:inline-flex}
+.reset-chip:hover{border-color:var(--ink-3);background:#fafafa;color:var(--ink)}
 
 .no-print{}
 @media print{
@@ -285,11 +305,28 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     <input id="q" placeholder="Search project, description or PO…">
   </div>
-  <select class="filter" id="fStatus"><option value="">All statuses</option></select>
   <button class="btn" id="msToggle"><i class="ti ti-arrows-diagonal-minimize-2"></i>Collapse dates</button>
   <button class="btn" id="addRow"><i class="ti ti-plus"></i>Add project</button>
   <button class="btn" id="exCsv"><i class="ti ti-file-spreadsheet"></i>Excel</button>
   <button class="btn primary" id="pdfBtn"><i class="ti ti-file-type-pdf"></i>Client PDF</button>
+</section>
+
+<!-- ===================== BULK ACTION BAR ===================== -->
+<section class="bulkbar no-print" id="bulkbar" hidden>
+  <div class="bulkbar-inner">
+    <span class="bulk-count"><b id="bulkN">0</b> selected</span>
+    <select id="bulkStatus" class="filter">
+      <option value="">Set status…</option>
+      <option value="__auto">Auto (from workflow)</option>
+      <option value="HOLD">HOLD</option>
+      <option value="P1">P1</option>
+      <option value="WIP">WIP</option>
+      <option value="IFA">IFA</option>
+      <option value="IFC">IFC</option>
+    </select>
+    <button class="btn" id="bulkDelete"><i class="ti ti-trash"></i>Delete selected</button>
+    <button class="btn ghost" id="bulkClear">Clear selection</button>
+  </div>
 </section>
 
 <!-- ===================== TABLE ===================== -->
@@ -298,6 +335,7 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
     <table id="regTable">
       <thead>
         <tr>
+          <th class="sel no-print"><input type="checkbox" id="selAll" title="Select all shown"></th>
           <th class="no-print"></th>
           <th>#</th>
           <th>Client</th>
@@ -316,7 +354,7 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
 </section>
 
 <div class="foot no-print">
-  <strong>Status legend</strong>
+  <strong>Filter by status</strong>
   <div class="legend" id="legend"></div>
   <p style="margin-top:12px">Every change syncs live to the team in real time. <b>Excel</b> exports the full register; <b>Client PDF</b> generates the branded issue sheet — choose "Save as PDF", A4 landscape.</p>
 </div>
@@ -501,12 +539,19 @@ function queueMetaSave(){
    RENDER
    ============================================================ */
 const tbody=document.getElementById("tbody");
-const q=document.getElementById("q"), fStatus=document.getElementById("fStatus");
+const q=document.getElementById("q");
+const statusFilter=new Set(STATUS.map(s=>s.code));
+const selected=new Set();
 
 function txt(r,field,cls){
   const i=document.createElement("input");i.className="txt"+(cls?" "+cls:"");i.value=r[field]||"";i.dataset.f=field;
   return i;
 }
+function area(r,field){
+  const t=document.createElement("textarea");t.className="txt";t.rows=1;t.value=r[field]||"";t.dataset.f=field;
+  return t;
+}
+function autoGrow(el){ el.style.height="auto"; el.style.height=el.scrollHeight+"px"; }
 function mk(cls,node){const td=document.createElement("td");td.className=cls;const c=document.createElement("div");c.className="cell";c.appendChild(node);td.appendChild(c);return td;}
 
 function statusCell(r){
@@ -532,6 +577,10 @@ function dateCell(r,field){
 function buildRow(r,visualIdx){
   const tr=document.createElement("tr");tr.dataset.id=r.id;
 
+  const tdSel=document.createElement("td");tdSel.className="sel no-print";
+  tdSel.innerHTML='<input type="checkbox" class="rowsel"'+(selected.has(r.id)?" checked":"")+'>';
+  tr.appendChild(tdSel);
+
   const tdA=document.createElement("td");tdA.className="act no-print";
   tdA.innerHTML='<button class="del" title="Delete"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
   tr.appendChild(tdA);
@@ -540,7 +589,7 @@ function buildRow(r,visualIdx){
 
   tr.appendChild(mk("client",txt(r,"client")));
   tr.appendChild(mk("project",txt(r,"project")));
-  tr.appendChild(mk("desc",txt(r,"desc")));
+  tr.appendChild(mk("desc",area(r,"desc")));
   MILESTONES.forEach(m=>tr.appendChild(dateCell(r,m.f)));
   tr.appendChild(statusCell(r));
   tr.appendChild(mk("po",txt(r,"po")));
@@ -550,7 +599,7 @@ function buildRow(r,visualIdx){
 function passFilter(r){
   const term=q.value.trim().toLowerCase();
   if(term && !((r.project+" "+r.desc+" "+r.po).toLowerCase().includes(term))) return false;
-  if(fStatus.value && effectiveStatus(r)!==fStatus.value) return false;
+  if(!statusFilter.has(effectiveStatus(r))) return false;
   return true;
 }
 
@@ -559,11 +608,13 @@ function render(){
   const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).filter(passFilter);
   if(!rows.length){
     const tr=document.createElement("tr");tr.className="empty";
-    tr.innerHTML='<td colspan="10">No projects match your filters.</td>';
-    tbody.appendChild(tr);return dashboard();
+    tr.innerHTML='<td colspan="11">No projects match your filters.</td>';
+    tbody.appendChild(tr);updateBulk();return dashboard();
   }
   let n=0;
   rows.forEach(r=>{n++;tbody.appendChild(buildRow(r,n));});
+  tbody.querySelectorAll("textarea").forEach(autoGrow);
+  updateBulk();
   dashboard();
 }
 
@@ -585,7 +636,31 @@ function dashboard(){
 
 /* ---- legend ---- */
 function buildLegend(){
-  document.getElementById("legend").innerHTML=STATUS.map(s=>`<span class="pill ${s.cls}">${s.code} — ${s.label}</span>`).join("");
+  const wrap=document.getElementById("legend"); wrap.innerHTML="";
+  STATUS.forEach(s=>{
+    const b=document.createElement("button"); b.type="button"; b.className="filter-chip"; b.dataset.code=s.code;
+    b.innerHTML='<span class="box"></span><span class="pill '+s.cls+'">'+s.code+' — '+s.label+'</span>';
+    wrap.appendChild(b);
+  });
+  const rst=document.createElement("button"); rst.type="button"; rst.id="resetFilters"; rst.className="reset-chip";
+  rst.innerHTML='<i class="ti ti-filter-off"></i>Reset filters'; wrap.appendChild(rst);
+  updateFilterUI();
+}
+function updateFilterUI(){
+  const filtering=statusFilter.size<STATUS.length;
+  document.querySelectorAll("#legend .filter-chip").forEach(c=>{
+    const on=statusFilter.has(c.dataset.code);
+    c.classList.toggle("on",on); c.classList.toggle("dim",!on);
+  });
+  const rst=document.getElementById("resetFilters");
+  if(rst) rst.classList.toggle("show", filtering || (q.value.trim()!==""));
+}
+function wireStatusFilter(){
+  document.getElementById("legend").addEventListener("click",e=>{
+    const chip=e.target.closest(".filter-chip");
+    if(chip){ const code=chip.dataset.code; statusFilter.has(code)?statusFilter.delete(code):statusFilter.add(code); updateFilterUI(); render(); return; }
+    if(e.target.closest("#resetFilters")){ STATUS.forEach(s=>statusFilter.add(s.code)); q.value=""; updateFilterUI(); render(); }
+  });
 }
 
 /* ============================================================
@@ -596,6 +671,7 @@ tbody.addEventListener("input",e=>{
   const f=e.target.dataset.f; if(!f) return;
   const tr=e.target.closest("tr"); const r=getRow(tr.dataset.id); if(!r) return;
   r[f]=e.target.value; queueRowSave(r);
+  if(e.target.tagName==="TEXTAREA") autoGrow(e.target);
   if(MSFIELDS.includes(f)){
     const td=e.target.closest("td"); if(td) td.classList.toggle("done", !!r[f]);
   }
@@ -742,8 +818,7 @@ function toast(msg){
 /* ============================================================
    WIRING
    ============================================================ */
-STATUS.forEach(s=>{const o=document.createElement("option");o.value=s.code;o.textContent=s.code+" — "+s.label;fStatus.appendChild(o);});
-[q,fStatus].forEach(el=>el.addEventListener("input",render));
+q.addEventListener("input",()=>{updateFilterUI();render();});
 const regTable=document.getElementById("regTable");
 let msCollapsed=false;
 document.getElementById("msToggle").addEventListener("click",()=>{
@@ -756,7 +831,43 @@ document.getElementById("msToggle").addEventListener("click",()=>{
 projFields.forEach(id=>document.getElementById(id).addEventListener("input",queueMetaSave));
 
 if(meta&&Object.keys(meta).length){projFields.forEach(id=>{if(meta[id]!=null)document.getElementById(id).value=meta[id];});}
-buildLegend();render();setSync("ok");
+function visibleRows(){ return state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).filter(passFilter); }
+function updateBulk(){
+  const vis=visibleRows(); const selVis=vis.filter(r=>selected.has(r.id)).length;
+  const bar=document.getElementById("bulkbar");
+  document.getElementById("bulkN").textContent=selected.size;
+  bar.hidden = selected.size===0;
+  const sa=document.getElementById("selAll");
+  if(sa){ sa.checked = vis.length>0 && selVis===vis.length; sa.indeterminate = selVis>0 && selVis<vis.length; }
+}
+function wireBulk(){
+  tbody.addEventListener("change",e=>{
+    if(!e.target.classList.contains("rowsel")) return;
+    const id=e.target.closest("tr").dataset.id;
+    if(e.target.checked) selected.add(id); else selected.delete(id);
+    updateBulk();
+  });
+  document.getElementById("selAll").addEventListener("change",e=>{
+    const vis=visibleRows();
+    if(e.target.checked) vis.forEach(r=>selected.add(r.id)); else vis.forEach(r=>selected.delete(r.id));
+    render();
+  });
+  document.getElementById("bulkClear").addEventListener("click",()=>{ selected.clear(); render(); });
+  document.getElementById("bulkDelete").addEventListener("click",()=>{
+    if(!selected.size) return;
+    const n=selected.size;
+    if(!confirm("Delete "+n+" selected project"+(n>1?"s":"")+"?")) return;
+    [...selected].forEach(id=>deleteRow(id));
+    selected.clear(); render();
+  });
+  document.getElementById("bulkStatus").addEventListener("change",e=>{
+    const v=e.target.value; if(!v||!selected.size){ e.target.value=""; return; }
+    const manual = v==="__auto" ? "" : v;
+    state.forEach(r=>{ if(selected.has(r.id)){ r.manual=manual; saveRow(r); } });
+    e.target.value=""; render();
+  });
+}
+buildLegend();wireStatusFilter();wireBulk();render();setSync("ok");
 
 /* ============================================================
    CLOUD LOAD + LIVE SYNC
