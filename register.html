@@ -177,8 +177,8 @@ select.filter{height:36px;border:1px solid var(--line);border-radius:7px;backgro
 .table-wrap{max-width:1500px;margin:14px auto 40px;padding:0 22px}
 .table-scroll{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
   overflow:auto;max-height:calc(100vh - 300px);min-height:300px}
-table{border-collapse:separate;border-spacing:0;width:100%;min-width:1780px}
-table.ms-collapsed{min-width:1200px}
+table{border-collapse:separate;border-spacing:0;width:100%;min-width:1300px}
+table.ms-collapsed{min-width:830px}
 thead{position:sticky;top:0;z-index:3}
 thead th{background:var(--brand);color:#dfe7ef;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;
   text-align:left;padding:10px 10px;white-space:nowrap;border-bottom:2px solid var(--accent);vertical-align:bottom}
@@ -188,9 +188,11 @@ tbody td.idx{text-align:center;color:var(--ink-3);font-family:var(--mono);font-s
 td .cell{padding:6px 9px;min-height:34px;display:flex;align-items:center}
 td.client{min-width:96px}
 td.client .cell input.txt{font-weight:700;color:var(--ink-2);text-transform:uppercase;font-size:11.5px;letter-spacing:.3px}
-td.project{min-width:460px}
-td.project .cell input.txt{font-weight:700;color:var(--navy)}
-td.desc{min-width:300px;max-width:480px}
+td.project{min-width:180px;max-width:250px}
+td.project .cell{align-items:flex-start}
+td.project textarea.txt{resize:none;overflow:hidden;line-height:1.3;white-space:pre-wrap;word-break:break-word;min-height:20px}
+td.project .cell input.txt,td.project .cell textarea.txt{font-weight:700;color:var(--navy)}
+td.desc{min-width:160px;max-width:240px}
 td.desc .cell{align-items:flex-start}
 td.desc textarea.txt{resize:none;overflow:hidden;line-height:1.35;white-space:pre-wrap;word-break:break-word;min-height:20px}
 td.po{width:130px;min-width:130px}
@@ -220,8 +222,8 @@ td.ms.done{background:#eef7ef}
 td.ms .datecell{padding:5px 8px}
 td.ms .datecell input{border:none;background:transparent;font-family:var(--mono);font-size:11.5px;color:var(--ink);width:100%;cursor:pointer}
 td.ms .datecell input:focus{outline:none}
-thead th.ms.pct{width:96px;min-width:96px;max-width:96px}
-td.ms.pct{position:relative;width:96px;min-width:96px;max-width:96px}
+thead th.ms.pct{width:72px;min-width:72px;max-width:72px;white-space:normal}
+td.ms.pct{position:relative;width:72px;min-width:72px;max-width:72px}
 td.ms.pct .pctcell{padding:5px 9px;display:flex;align-items:center;gap:1px}
 td.ms.pct .pctcell input{border:none;background:transparent;font-family:var(--mono);font-size:11.5px;color:var(--ink);flex:1;min-width:0;text-align:right;-moz-appearance:textfield}
 td.ms.pct .pctcell input::-webkit-outer-spin-button,td.ms.pct .pctcell input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
@@ -619,7 +621,7 @@ function buildRow(r,visualIdx){
   const tdIdx=document.createElement("td");tdIdx.className="idx";tdIdx.textContent=visualIdx;tr.appendChild(tdIdx);
 
   tr.appendChild(mk("client",txt(r,"client")));
-  tr.appendChild(mk("project",txt(r,"project")));
+  tr.appendChild(mk("project",area(r,"project")));
   tr.appendChild(mk("desc",area(r,"desc")));
   PCTCOLS.forEach(m=>tr.appendChild(pctCell(r,m.f)));
   MILESTONES.forEach(m=>tr.appendChild(dateCell(r,m.f)));
