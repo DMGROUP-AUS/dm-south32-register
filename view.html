@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>South32 Tracking — Client Viewer</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --brand:#23201F; --brand-deep:#171514;
+  --accent:#FDD300; --accent-dark:#E6BE00;
+  --ink:#23201F; --ink-2:#4E4E4E; --ink-3:#8a8a8a; --navy:#1F3864;
+  --paper:#fff; --bg:#f0f0f0; --line:#D0D0D0; --line-soft:#e7e7e7;
+  --s-wip:#9C4A1A;  --s-wip-bg:#FBE0D0;
+  --s-p1:#1F3864;   --s-p1-bg:#DCE7F3;
+  --s-ifa:#5C4A00;  --s-ifa-bg:#FFE066;
+  --s-ifc:#375623;  --s-ifc-bg:#E2EFDA;
+  --s-hold:#5f5f5f; --s-hold-bg:#E4E4E4;
+  --shadow:0 1px 2px rgba(35,32,31,.06), 0 4px 16px rgba(35,32,31,.07);
+  --font:Arial,"Helvetica Neue",Helvetica,sans-serif;
+  --mono:"SFMono-Regular","Consolas","Roboto Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--font);color:var(--ink);background:var(--bg);font-size:13px;line-height:1.4;-webkit-font-smoothing:antialiased}
+
+.appbar{background:var(--brand);color:#fff;border-bottom:4px solid var(--accent)}
+.appbar-inner{max-width:1500px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-mark{width:40px;height:40px;border-radius:6px;background:var(--accent);color:var(--brand);display:grid;place-items:center;font-weight:800;font-size:17px;letter-spacing:-1px}
+.brand-txt h1{font-size:15px;margin:0;font-weight:700;letter-spacing:.2px}
+.brand-txt p{margin:1px 0 0;font-size:11px;color:#aebccc;letter-spacing:.4px;text-transform:uppercase}
+.appbar-spacer{flex:1}
+.viewer-badge{display:flex;align-items:center;gap:7px;background:rgba(253,211,0,0.14);color:var(--accent);
+  border:1px solid rgba(253,211,0,0.35);padding:5px 11px;border-radius:20px;font-size:10.5px;font-weight:700;letter-spacing:.9px;text-transform:uppercase}
+.viewer-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(253,211,0,.18)}
+.last-updated{font-size:11px;color:#c6d2de;margin-left:12px}
+
+.project{max-width:1500px;margin:18px auto 0;padding:0 22px}
+.project-card{background:var(--paper);border:1px solid var(--line);border-radius:6px;box-shadow:var(--shadow);padding:16px 20px;
+  display:grid;grid-template-columns:repeat(6,1fr);gap:12px 24px}
+.field{display:flex;flex-direction:column;gap:3px;min-width:0}
+.field label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-3);font-weight:600}
+.field .val{font-weight:700;font-size:13px;color:var(--ink);border-bottom:1px solid var(--line-soft);padding:2px 0 4px}
+.field.wide{grid-column:span 2}
+
+.dash{max-width:1500px;margin:14px auto 0;padding:0 22px;display:flex;gap:12px;flex-wrap:wrap}
+.stat{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:11px 15px;min-width:96px;flex:1;box-shadow:var(--shadow)}
+.stat .n{font-size:24px;font-weight:800;line-height:1;letter-spacing:-.5px}
+.stat .l{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3);margin-top:5px;font-weight:600}
+.stat.progress{flex:2;min-width:210px;display:flex;flex-direction:column;justify-content:center}
+.bar{height:9px;border-radius:6px;background:var(--line-soft);overflow:hidden;margin-top:9px}
+.bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#8bbf6a);border-radius:6px;transition:width .4s ease}
+.stat.progress .n{display:flex;align-items:baseline;gap:8px}
+.stat.progress .n small{font-size:12px;color:var(--ink-3);font-weight:600}
+
+.toolbar{max-width:1500px;margin:16px auto 0;padding:0 22px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.search{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:0 11px;height:36px}
+.search input{border:none;outline:none;flex:1;font-family:var(--font);font-size:13px;background:transparent;color:var(--ink)}
+select.filter{height:36px;border:1px solid var(--line);border-radius:6px;background:var(--paper);
+  padding:0 30px 0 11px;font-family:var(--font);font-size:12.5px;color:var(--ink);font-weight:600;cursor:pointer;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238492a1' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center}
+.btn{height:36px;border:1px solid var(--line);border-radius:6px;background:var(--paper);
+  padding:0 14px;font-family:var(--font);font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:.12s}
+.btn:hover{border-color:var(--ink-3);background:#fafbfc}
+.btn.primary{background:var(--accent);border-color:var(--accent-dark);color:var(--brand);font-weight:700}
+.btn.primary:hover{background:var(--accent-dark)}
+
+.table-wrap{max-width:1500px;margin:14px auto 40px;padding:0 22px}
+.table-scroll{background:var(--paper);border:1px solid var(--line);border-radius:6px;box-shadow:var(--shadow);overflow:auto;max-height:calc(100vh - 300px);min-height:300px}
+table{border-collapse:separate;border-spacing:0;width:100%;min-width:960px}
+thead{position:sticky;top:0;z-index:3}
+thead th{background:var(--brand);color:#dfe7ef;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;
+  text-align:left;padding:10px 10px;white-space:nowrap;border-bottom:2px solid var(--accent);vertical-align:bottom}
+tbody td{padding:7px 10px;border-bottom:1px solid var(--line-soft);font-size:12.5px;vertical-align:middle;border-right:1px solid var(--line-soft)}
+tbody tr:hover{background:#f7f9fb}
+td.idx{text-align:center;color:var(--ink-3);font-family:var(--mono);font-size:11px;width:38px}
+td.client{font-weight:700;color:var(--ink-2);text-transform:uppercase;font-size:11.5px;min-width:96px}
+td.project{font-weight:700;color:var(--navy);min-width:300px}
+td.desc{min-width:320px}
+td.po{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);width:120px}
+td.status{width:110px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;padding:4px 12px;border-radius:20px;white-space:nowrap;letter-spacing:.4px}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.85}
+.pill.wip{color:var(--s-wip);background:var(--s-wip-bg)}
+.pill.p1{color:var(--s-p1);background:var(--s-p1-bg)}
+.pill.ifa{color:var(--s-ifa);background:var(--s-ifa-bg)}
+.pill.ifc{color:var(--s-ifc);background:var(--s-ifc-bg)}
+.pill.hold{color:var(--s-hold);background:var(--s-hold-bg)}
+tr.empty td{padding:40px;text-align:center;color:var(--ink-3)}
+
+.foot{max-width:1500px;margin:0 auto 60px;padding:0 22px;color:var(--ink-2);font-size:12px}
+.foot strong{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-3);margin-bottom:8px}
+.legend{display:flex;gap:8px;flex-wrap:wrap}
+
+@media print{
+  .no-print{display:none!important}
+  body{background:#fff}
+  .table-scroll{max-height:none;box-shadow:none;border:1px solid #333;overflow:visible}
+  table{min-width:0}
+  thead th,.pill{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+
+<header class="appbar">
+  <div class="appbar-inner">
+    <div class="brand">
+      <div class="brand-mark">DM</div>
+      <div class="brand-txt">
+        <h1>DM GROUP — South32 Project Tracking Register</h1>
+        <p id="jobBadge">Cannington (CNN)</p>
+      </div>
+    </div>
+    <div class="appbar-spacer"></div>
+    <div class="viewer-badge"><span class="dot"></span>Read-only view</div>
+    <span class="last-updated" id="lastUpdated"></span>
+  </div>
+</header>
+
+<section class="project">
+  <div class="project-card">
+    <div class="field wide"><label>Client</label><div class="val" id="vClient">South32</div></div>
+    <div class="field wide"><label>Site / Operation</label><div class="val" id="vSite">Cannington (CNN)</div></div>
+    <div class="field wide"><label>Register Title</label><div class="val" id="vTitle">Project Tracking Register</div></div>
+    <div class="field wide"><label>Prepared By</label><div class="val" id="vPrep">DM Group</div></div>
+    <div class="field wide"><label>Discipline</label><div class="val" id="vDisc">Structural / Platework</div></div>
+    <div class="field wide"><label>Framework PO Prefix</label><div class="val" id="vPo">45434xxxxx</div></div>
+  </div>
+</section>
+
+<section class="dash" id="dash"></section>
+
+<section class="toolbar no-print">
+  <div class="search">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <input id="q" placeholder="Search project, description or PO…">
+  </div>
+  <select class="filter" id="fStatus"><option value="">All statuses</option></select>
+  <button class="btn" id="exCsv"><i class="ti ti-file-spreadsheet"></i>Excel</button>
+  <button class="btn primary" id="printBtn"><i class="ti ti-printer"></i>Print / PDF</button>
+</section>
+
+<section class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>#</th><th>Client</th><th>Project</th><th>Description</th><th>Status</th><th>PO</th></tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</section>
+
+<div class="foot no-print">
+  <strong>Status legend</strong>
+  <div class="legend" id="legend"></div>
+  <p style="margin-top:12px">This is a live read-only view. It updates automatically as DM Group progresses each project.</p>
+</div>
+
+<script>
+const STATUS=[
+  {code:"WIP",cls:"wip",label:"Work in Progress"},
+  {code:"P1",cls:"p1",label:"Site Review (P1)"},
+  {code:"IFA",cls:"ifa",label:"Issued for Approval"},
+  {code:"IFC",cls:"ifc",label:"Issued for Construction"},
+  {code:"HOLD",cls:"hold",label:"On Hold"},
+];
+const SMAP=Object.fromEntries(STATUS.map(s=>[s.code,s]));
+const SWEIGHT={WIP:35,P1:60,IFA:80,HOLD:50,IFC:100};
+
+const SUPABASE_URL="https://xabzlhdqozvibpjgkxws.supabase.co";
+const SUPABASE_KEY="sb_publishable_xG7KPvVEIlV9h7EYR9IgmA_ZPqyy-AO";
+const TABLE="south32_items";
+const META_ID="__meta__";
+
+let sb=null;
+if(window.supabase){ try{ sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY); }catch(e){} }
+
+let state=[];
+const tbody=document.getElementById("tbody");
+const q=document.getElementById("q"), fStatus=document.getElementById("fStatus");
+
+function esc(s){return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+
+function passFilter(r){
+  const term=q.value.trim().toLowerCase();
+  if(term && !((r.project+" "+r.desc+" "+r.po).toLowerCase().includes(term))) return false;
+  if(fStatus.value && r.status!==fStatus.value) return false;
+  return true;
+}
+function render(){
+  const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).filter(passFilter);
+  if(!rows.length){ tbody.innerHTML='<tr class="empty"><td colspan="6">No projects match your filters.</td></tr>'; return dashboard(); }
+  tbody.innerHTML=rows.map((r,i)=>{
+    const s=SMAP[r.status]||STATUS[0];
+    return '<tr>'
+      +'<td class="idx">'+(i+1)+'</td>'
+      +'<td class="client">'+esc(r.client)+'</td>'
+      +'<td class="project">'+esc(r.project)+'</td>'
+      +'<td class="desc">'+esc(r.desc)+'</td>'
+      +'<td class="status"><span class="pill '+s.cls+'" title="'+esc(s.label)+'">'+esc(s.code)+'</span></td>'
+      +'<td class="po">'+esc(r.po)+'</td>'
+      +'</tr>';
+  }).join("");
+  dashboard();
+}
+function dashboard(){
+  const counts={WIP:0,P1:0,IFA:0,IFC:0,HOLD:0}; let sum=0;
+  state.forEach(r=>{counts[r.status]=(counts[r.status]||0)+1;sum+=(SWEIGHT[r.status]||0);});
+  const overall=state.length?Math.round(sum/state.length):0;
+  document.getElementById("dash").innerHTML=`
+    <div class="stat"><div class="n">${state.length}</div><div class="l">Total projects</div></div>
+    <div class="stat"><div class="n" style="color:var(--s-wip)">${counts.WIP}</div><div class="l">Work in progress</div></div>
+    <div class="stat"><div class="n" style="color:var(--s-p1)">${counts.P1}</div><div class="l">Site review (P1)</div></div>
+    <div class="stat"><div class="n" style="color:var(--s-ifa)">${counts.IFA}</div><div class="l">Issued for approval</div></div>
+    <div class="stat"><div class="n" style="color:var(--s-ifc)">${counts.IFC}</div><div class="l">Iss. for construction</div></div>
+    <div class="stat"><div class="n" style="color:var(--s-hold)">${counts.HOLD}</div><div class="l">On hold</div></div>
+    <div class="stat progress"><div class="n">${overall}%<small>overall completion</small></div><div class="bar"><i style="width:${overall}%"></i></div></div>`;
+}
+function buildLegend(){
+  document.getElementById("legend").innerHTML=STATUS.map(s=>`<span class="pill ${s.cls}">${s.code} — ${s.label}</span>`).join("");
+}
+function applyMeta(m){
+  if(!m) return;
+  const map={pClient:"vClient",pSite:"vSite",pTitle:"vTitle",pPrep:"vPrep",pDisc:"vDisc",pPo:"vPo"};
+  Object.entries(map).forEach(([k,v])=>{ if(m[k]!=null) document.getElementById(v).textContent=m[k]; });
+  if(m.pSite) document.getElementById("jobBadge").textContent=m.pSite;
+}
+
+/* Excel export */
+function tstamp(){return new Date().toISOString().slice(0,16).replace("T","_").replace(":","");}
+document.getElementById("exCsv").addEventListener("click",()=>{
+  if(!state.length) return;
+  const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).map((r,i)=>({
+    "#":i+1,"Client":r.client,"Project":r.project,"Description":r.desc,
+    "Status":r.status,"Status (full)":(SMAP[r.status]||{}).label||"","PO":r.po
+  }));
+  const ws=XLSX.utils.json_to_sheet(rows);
+  ws["!cols"]=[{wch:5},{wch:11},{wch:52},{wch:60},{wch:8},{wch:24},{wch:14}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"South32 Register");
+  XLSX.writeFile(wb,"South32_Tracking_Register_"+tstamp()+".xlsx");
+});
+document.getElementById("printBtn").addEventListener("click",()=>window.print());
+
+[q,fStatus].forEach(el=>el.addEventListener("input",render));
+STATUS.forEach(s=>{const o=document.createElement("option");o.value=s.code;o.textContent=s.code+" — "+s.label;fStatus.appendChild(o);});
+buildLegend();
+
+async function load(){
+  if(!sb){ render(); return; }
+  const {data,error}=await sb.from(TABLE).select("*").order("pos",{ascending:true});
+  if(error){ render(); return; }
+  state=data.filter(r=>r.id!==META_ID).map(r=>({...r.data,id:r.id,pos:r.pos}));
+  const metaRow=data.find(r=>r.id===META_ID);
+  if(metaRow) applyMeta(metaRow.data||{});
+  document.getElementById("lastUpdated").textContent="Updated "+new Date().toLocaleString("en-AU",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
+  render();
+}
+load();
+
+if(sb){
+  sb.channel("south32-view")
+    .on("postgres_changes",{event:"*",schema:"public",table:TABLE},payload=>{
+      const row=payload.new||payload.old; if(!row) return;
+      if(row.id===META_ID){ if(payload.new) applyMeta(payload.new.data); return; }
+      if(payload.eventType==="DELETE") state=state.filter(x=>x.id!==row.id);
+      else{
+        const rec={...payload.new.data,id:row.id,pos:payload.new.pos};
+        const i=state.findIndex(x=>x.id===row.id);
+        if(i>=0) state[i]=rec; else state.push(rec);
+      }
+      document.getElementById("lastUpdated").textContent="Updated "+new Date().toLocaleString("en-AU",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
+      render();
+    })
+    .subscribe();
+}
+</script>
+</body>
+</html>

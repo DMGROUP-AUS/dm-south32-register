@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>South32 — Project Tracking Register</title>
+
+<!-- ============ Password gate (team access) ============ -->
+<script>
+(function(){
+  const PW="dmgroup2026";
+  const KEY="dm_dawsons_auth_v1";
+  if(sessionStorage.getItem(KEY)===PW) return;
+  document.documentElement.style.background="#23201F";
+  document.addEventListener("DOMContentLoaded",()=>{
+    const g=document.createElement("div");
+    g.id="__gate";
+    g.innerHTML=`
+      <style>
+        #__gate{position:fixed;inset:0;background:#23201F;z-index:99999;
+          display:flex;align-items:center;justify-content:center;
+          font-family:Arial,Helvetica,sans-serif;color:#fff;padding:20px}
+        #__gate .box{background:#fff;color:#23201F;border-radius:8px;width:100%;max-width:380px;
+          overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+        #__gate .head{background:#23201F;color:#fff;padding:16px 20px;
+          border-bottom:3px solid #FDD300;display:flex;align-items:center;gap:12px}
+        #__gate .mark{width:40px;height:40px;border-radius:6px;background:#FDD300;color:#23201F;
+          display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;letter-spacing:-1px}
+        #__gate h2{font-size:15px;font-weight:700;margin:0}
+        #__gate .head p{font-size:11px;color:rgba(255,255,255,.55);margin:2px 0 0}
+        #__gate .body{padding:22px 22px 18px}
+        #__gate label{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#4E4E4E;font-weight:700;display:block;margin-bottom:6px}
+        #__gate input{width:100%;padding:11px 13px;border:1px solid #D0D0D0;border-radius:5px;
+          font-size:14px;font-family:inherit;color:#23201F;outline:none}
+        #__gate input:focus{border-color:#E6BE00;box-shadow:0 0 0 3px rgba(253,211,0,.22)}
+        #__gate .err{color:#c0392b;font-size:12px;margin-top:8px;min-height:16px;font-weight:600}
+        #__gate button{width:100%;margin-top:14px;background:#FDD300;color:#23201F;border:1px solid #E6BE00;
+          padding:11px;border-radius:5px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+        #__gate button:hover{background:#E6BE00}
+        #__gate .hint{margin-top:14px;font-size:11px;color:#888;text-align:center;line-height:1.5}
+        #__gate .hint a{color:#4E4E4E;font-weight:700;text-decoration:none}
+        #__gate .hint a:hover{color:#23201F;text-decoration:underline}
+      </style>
+      <div class="box">
+        <div class="head">
+          <div class="mark">DM</div>
+          <div>
+            <h2>Team Access Required</h2>
+            <p>DM Group internal register</p>
+          </div>
+        </div>
+        <div class="body">
+          <label for="__pw">Password</label>
+          <input id="__pw" type="password" autofocus placeholder="Enter team password">
+          <div class="err" id="__err"></div>
+          <button id="__go">Unlock</button>
+          <div class="hint">Client review? Use the <a href="./view.html${location.search}">read-only viewer</a>.</div>
+        </div>
+      </div>`;
+    document.body.appendChild(g);
+    Array.from(document.body.children).forEach(el=>{if(el.id!=="__gate")el.style.display="none";});
+    const tryPw=()=>{
+      const v=document.getElementById("__pw").value;
+      if(v===PW){
+        sessionStorage.setItem(KEY,PW);
+        g.remove();
+        Array.from(document.body.children).forEach(el=>el.style.display="");
+        document.documentElement.style.background="";
+      }else{
+        document.getElementById("__err").textContent="Incorrect password. Try again.";
+        document.getElementById("__pw").select();
+      }
+    };
+    document.getElementById("__go").addEventListener("click",tryPw);
+    document.getElementById("__pw").addEventListener("keydown",e=>{if(e.key==="Enter")tryPw();});
+  });
+})();
+</script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* ============================================================
+   DM-GROUP BRAND TOKENS  (black + yellow, Arial, flat corners)
+   ============================================================ */
+:root{
+  --brand:#23201F; --brand-deep:#171514;
+  --accent:#FDD300; --accent-dark:#E6BE00; --accent-soft:#FFF3B0;
+  --ink:#23201F; --ink-2:#4E4E4E; --ink-3:#8a8a8a;
+  --navy:#1F3864;
+  --paper:#ffffff; --bg:#f0f0f0;
+  --line:#D0D0D0; --line-soft:#e7e7e7;
+
+  /* South32 status palette — mirrors the client register colours */
+  --s-wip:#9C4A1A;  --s-wip-bg:#FBE0D0;   /* Work in Progress   — peach   */
+  --s-p1:#1F3864;   --s-p1-bg:#DCE7F3;    /* Site Review (P1)   — blue    */
+  --s-ifa:#5C4A00;  --s-ifa-bg:#FFE066;   /* Issued for Approval— amber   */
+  --s-ifc:#375623;  --s-ifc-bg:#E2EFDA;   /* Iss. for Construct.— green   */
+  --s-hold:#5f5f5f; --s-hold-bg:#E4E4E4;  /* On Hold            — grey    */
+
+  --radius:6px;
+  --shadow:0 1px 2px rgba(35,32,31,.06), 0 4px 16px rgba(35,32,31,.07);
+  --font:Arial,"Helvetica Neue",Helvetica,sans-serif;
+  --mono:"SFMono-Regular","Consolas","Roboto Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--font);color:var(--ink);background:var(--bg);font-size:13px;line-height:1.4;-webkit-font-smoothing:antialiased}
+
+/* ---------- Header ---------- */
+.appbar{background:var(--brand);color:#fff;border-bottom:4px solid var(--accent)}
+.appbar-inner{max-width:1500px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-mark{width:40px;height:40px;border-radius:7px;background:var(--accent);color:var(--brand-deep);
+  display:grid;place-items:center;font-weight:800;font-size:17px;letter-spacing:-1px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)}
+.brand-txt h1{font-size:15px;margin:0;font-weight:700;letter-spacing:.2px}
+.brand-txt p{margin:1px 0 0;font-size:11px;color:#aebccc;letter-spacing:.4px;text-transform:uppercase}
+.appbar-spacer{flex:1}
+.save-chip{font-size:11px;color:#c6d2de;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.06);padding:6px 11px;border-radius:20px}
+.save-dot{width:7px;height:7px;border-radius:50%;background:var(--s-ifc);box-shadow:0 0 0 3px rgba(55,86,35,.25)}
+.save-dot.dirty{background:var(--accent);box-shadow:0 0 0 3px rgba(224,138,30,.25)}
+.save-dot.err{background:#e05a4d;box-shadow:0 0 0 3px rgba(224,90,77,.28)}
+.hlink{text-decoration:none;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:20px;margin-left:8px}
+.hlink.view{color:#23201F;background:#FDD300;border:1px solid #E6BE00}
+.hlink.back{color:#c6d2de;background:rgba(255,255,255,.06)}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
+  background:var(--brand);color:#fff;padding:11px 20px;border-radius:6px;font-size:13px;font-weight:600;
+  border-left:4px solid var(--accent);box-shadow:0 8px 30px rgba(35,32,31,.25);
+  opacity:0;pointer-events:none;transition:.25s;z-index:100}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---------- Project block ---------- */
+.project{max-width:1500px;margin:18px auto 0;padding:0 22px}
+.project-card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:16px 18px;display:grid;grid-template-columns:repeat(6,1fr);gap:14px 20px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-3);font-weight:600}
+.field input{border:none;border-bottom:1px solid var(--line);background:transparent;
+  font-family:var(--font);font-size:13px;color:var(--ink);padding:3px 1px;font-weight:600}
+.field input:focus{outline:none;border-bottom-color:var(--accent)}
+.field.wide{grid-column:span 2}
+
+/* ---------- Dashboard ---------- */
+.dash{max-width:1500px;margin:14px auto 0;padding:0 22px;display:flex;gap:12px;flex-wrap:wrap;align-items:stretch}
+.stat{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:11px 15px;min-width:96px;flex:1;box-shadow:var(--shadow)}
+.stat .n{font-size:24px;font-weight:800;line-height:1;letter-spacing:-.5px}
+.stat .l{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3);margin-top:5px;font-weight:600}
+.stat.progress{flex:2;min-width:210px;display:flex;flex-direction:column;justify-content:center}
+.bar{height:9px;border-radius:6px;background:var(--line-soft);overflow:hidden;margin-top:9px}
+.bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#8bbf6a);border-radius:6px;transition:width .4s ease}
+.stat.progress .n{display:flex;align-items:baseline;gap:8px}
+.stat.progress .n small{font-size:12px;color:var(--ink-3);font-weight:600}
+
+/* ---------- Toolbar ---------- */
+.toolbar{max-width:1500px;margin:16px auto 0;padding:0 22px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.search{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--line);border-radius:7px;padding:0 11px;height:36px}
+.search input{border:none;outline:none;flex:1;font-family:var(--font);font-size:13px;background:transparent;color:var(--ink)}
+.search svg{flex:none;color:var(--ink-3)}
+select.filter{height:36px;border:1px solid var(--line);border-radius:7px;background:var(--paper);
+  padding:0 30px 0 11px;font-family:var(--font);font-size:12.5px;color:var(--ink);font-weight:600;cursor:pointer;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238492a1' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center}
+.btn{height:36px;border:1px solid var(--line);border-radius:7px;background:var(--paper);
+  padding:0 14px;font-family:var(--font);font-size:12.5px;font-weight:600;color:var(--ink);
+  cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:.12s}
+.btn:hover{border-color:var(--ink-3);background:#fafbfc}
+.btn svg{color:var(--ink-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent-dark);color:var(--brand);font-weight:700}
+.btn.primary:hover{background:var(--accent-dark);border-color:var(--accent-dark)}
+.btn.ghost{background:transparent}
+
+/* ---------- Table ---------- */
+.table-wrap{max-width:1500px;margin:14px auto 40px;padding:0 22px}
+.table-scroll{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+  overflow:auto;max-height:calc(100vh - 300px);min-height:300px}
+table{border-collapse:separate;border-spacing:0;width:100%;min-width:960px}
+thead{position:sticky;top:0;z-index:3}
+thead th{background:var(--brand);color:#dfe7ef;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;
+  text-align:left;padding:10px 10px;white-space:nowrap;border-bottom:2px solid var(--accent);vertical-align:bottom}
+tbody td{padding:0;border-bottom:1px solid var(--line-soft);font-size:12.5px;vertical-align:middle;border-right:1px solid var(--line-soft)}
+tbody tr:hover{background:#f7f9fb}
+tbody td.idx{text-align:center;color:var(--ink-3);font-family:var(--mono);font-size:11px;width:38px;padding:0 4px}
+td .cell{padding:6px 9px;min-height:34px;display:flex;align-items:center}
+td.client{min-width:96px}
+td.client .cell input.txt{font-weight:700;color:var(--ink-2);text-transform:uppercase;font-size:11.5px;letter-spacing:.3px}
+td.project{min-width:300px}
+td.project .cell input.txt{font-weight:700;color:var(--navy)}
+td.desc{min-width:320px}
+td.po{width:120px}
+td.po .cell input.txt{font-family:var(--mono);font-size:11.5px;color:var(--ink-2)}
+td .cell input.txt{border:none;background:transparent;font-family:inherit;font-size:12.5px;color:var(--ink);width:100%;padding:0}
+td .cell input.txt:focus{outline:none}
+
+/* status pill + select */
+td.status{width:150px}
+.status-wrap{position:relative;display:flex;align-items:center;padding:6px 9px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;padding:4px 12px;border-radius:20px;
+  white-space:nowrap;letter-spacing:.4px}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.85}
+.pill.wip{color:var(--s-wip);background:var(--s-wip-bg)}
+.pill.p1{color:var(--s-p1);background:var(--s-p1-bg)}
+.pill.ifa{color:var(--s-ifa);background:var(--s-ifa-bg)}
+.pill.ifc{color:var(--s-ifc);background:var(--s-ifc-bg)}
+.pill.hold{color:var(--s-hold);background:var(--s-hold-bg)}
+.status-sel{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-family:inherit}
+
+/* delete */
+td.act{width:34px}
+.del{width:26px;height:26px;margin:0 auto;display:grid;place-items:center;border:1px solid var(--line);border-radius:5px;
+  background:#f5f5f5;color:var(--ink-3);cursor:pointer}
+.del:hover{background:#fdecea;color:#c0392b;border-color:#f5c0b8}
+
+tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
+
+/* ---------- Legend / footer ---------- */
+.foot{max-width:1500px;margin:0 auto 60px;padding:0 22px;color:var(--ink-2);font-size:12px}
+.foot strong{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-3);margin-bottom:8px}
+.legend{display:flex;gap:8px;flex-wrap:wrap}
+
+.no-print{}
+@media print{
+  .no-print{display:none!important}
+  body{background:#fff}
+  .appbar{border-bottom:4px solid var(--accent)}
+  .table-scroll{max-height:none;box-shadow:none;border:1px solid #333;overflow:visible}
+  table{min-width:0}
+  thead th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .pill{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== HEADER ===================== -->
+<header class="appbar">
+  <div class="appbar-inner">
+    <div class="brand">
+      <div class="brand-mark">DM</div>
+      <div class="brand-txt">
+        <h1>DM GROUP — South32 Project Tracking Register</h1>
+        <p id="jobBadge">Cannington (CNN) &nbsp;·&nbsp; Live register</p>
+      </div>
+    </div>
+    <div class="appbar-spacer"></div>
+    <div class="save-chip no-print"><span class="save-dot" id="saveDot"></span><span id="saveTxt">All changes saved</span></div>
+    <a class="hlink view no-print" href="./view.html" target="_blank" rel="noopener" title="Open the read-only client view">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> Client View</a>
+    <a class="hlink back no-print" href="./" title="Back to portal">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> All jobs</a>
+  </div>
+</header>
+
+<!-- ===================== PROJECT BLOCK ===================== -->
+<section class="project">
+  <div class="project-card">
+    <div class="field wide"><label>Client</label><input id="pClient" value="South32"></div>
+    <div class="field wide"><label>Site / Operation</label><input id="pSite" value="Cannington (CNN)"></div>
+    <div class="field wide"><label>Register Title</label><input id="pTitle" value="Project Tracking Register"></div>
+    <div class="field wide"><label>Prepared By</label><input id="pPrep" value="DM Group"></div>
+    <div class="field wide"><label>Discipline</label><input id="pDisc" value="Structural / Platework"></div>
+    <div class="field wide"><label>Framework PO Prefix</label><input id="pPo" value="45434xxxxx"></div>
+  </div>
+</section>
+
+<!-- ===================== DASHBOARD ===================== -->
+<section class="dash" id="dash"></section>
+
+<!-- ===================== TOOLBAR ===================== -->
+<section class="toolbar no-print">
+  <div class="search">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <input id="q" placeholder="Search project, description or PO…">
+  </div>
+  <select class="filter" id="fStatus"><option value="">All statuses</option></select>
+  <button class="btn" id="addRow"><i class="ti ti-plus"></i>Add project</button>
+  <button class="btn" id="exCsv"><i class="ti ti-file-spreadsheet"></i>Excel</button>
+  <button class="btn primary" id="pdfBtn"><i class="ti ti-file-type-pdf"></i>Client PDF</button>
+</section>
+
+<!-- ===================== TABLE ===================== -->
+<section class="table-wrap">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th class="no-print"></th>
+          <th>#</th>
+          <th>Client</th>
+          <th>Project</th>
+          <th>Description</th>
+          <th>Status</th>
+          <th>PO</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</section>
+
+<div class="foot no-print">
+  <strong>Status legend</strong>
+  <div class="legend" id="legend"></div>
+  <p style="margin-top:12px">Every change syncs live to the team in real time. <b>Excel</b> exports the full register; <b>Client PDF</b> generates the branded issue sheet — choose "Save as PDF", A4 landscape.</p>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+/* ============================================================
+   STATUS DEFINITIONS
+   ============================================================ */
+const STATUS = [
+  {code:"WIP",  cls:"wip",  label:"Work in Progress"},
+  {code:"P1",   cls:"p1",   label:"Site Review (P1)"},
+  {code:"IFA",  cls:"ifa",  label:"Issued for Approval"},
+  {code:"IFC",  cls:"ifc",  label:"Issued for Construction"},
+  {code:"HOLD", cls:"hold", label:"On Hold"},
+];
+const SMAP = Object.fromEntries(STATUS.map(s=>[s.code,s]));
+/* progress weight per status — drives the overall completion bar */
+const SWEIGHT = {WIP:35, P1:60, IFA:80, HOLD:50, IFC:100};
+
+/* ============================================================
+   SEED DATA — South32 Cannington register (from issued sheet)
+   ============================================================ */
+const RAW = [
+ ["SOUTH 32","[09-2279-012] CNN Pastefill - DEFECT BU45502-54 & 117","Completed","IFC","4543432481"],
+ ["SOUTH 32","[09-2279-014] CNN BU45502-115 DEFECT Pastefill","Completed","IFC","4543432481"],
+ ["SOUTH 32","[09-2279-015] CNN BU45502-157 DEFECT Pastefill","Completed","IFC","4543432481"],
+ ["SOUTH 32","[09-2279-016] CNN BU45502-174  DEFECT Pastefill","Completed","IFC","4543432481"],
+ ["SOUTH 32","[09-2279-017] CNN Pastefill - DEFECT BU45502-31","Completed","IFC","4543432481"],
+ ["SOUTH 32","[09-2401-V05] CNN Filters Temp Steel Phase 1","Full IFA completed - waiting for IFA comments.","IFA","4543426063"],
+ ["SOUTH 32","[09-2415-V02] CNN Paste Plant Reversing Conveyor V02","Full IFA completed - waiting for IFA comments.","IFA","4543432485"],
+ ["SOUTH 32","[09-2446] CNN Paste Pump Access Platforms","Model and Drawings issued for site review/Comment","P1","4543432483"],
+ ["SOUTH 32","[09-2452] CNN Paste Plant Speed Loop Scan","Model and Drawings issued for site review/Comment","P1","4543438513"],
+ ["SOUTH 32","[09-2463] CNN Flotation RWP 78","Full IFA completed - waiting for IFA comments.","IFA","4543404258"],
+ ["SOUTH 32","[09-2464] CNN Split Floats 4 Cell Platform Replacement","Work in Progress","WIP","4543406707"],
+ ["SOUTH 32","[09-2465] CNN Main Floats Tank Platform Replacement","Shop model 100% - Shop detailing started. IFA end of week","WIP","4543406706"],
+ ["SOUTH 32","[09-2466] CNN Secondary Grinding Area 64","Full IFA completed and issued - Rockfield design change received, work in progress","IFA","4543404257"],
+ ["SOUTH 32","[09-2482] CNN Defect - CV41504-26","Shop model 100% - Updates from Rockfield in progress. Job HOLD.","HOLD","4543432482"],
+ ["SOUTH 32","[09-2483] CNN Split Floats Defect - FL43456-4 Pipe Supports","Completed","IFC","4543432480"],
+ ["SOUTH 32","[09-2486] CNN Secondary Grinding 81","Shop model 100% - Shop detailing 75%. IFA end of week","WIP","4543432484"],
+ ["SOUTH 32","[09-2501] CNN Secondary Grinding 72","Order received - ASB modelling to progress","WIP","4543445080"],
+ ["SOUTH 32","[09-2503] CNN Defect Flotation 159","Order received - ASB modelling to progress","WIP","4543445079"],
+];
+function seed(){
+  return RAW.map((r,i)=>({
+    id:"s"+(i+1), pos:i,
+    client:r[0], project:r[1], desc:r[2], status:r[3], po:r[4]
+  }));
+}
+
+/* ============================================================
+   STORAGE  ——  local cache + optional Supabase cloud sync
+   ► Uses the same DM TRACKING Supabase project as the Dawsons
+     register, but its own table so the two never collide.
+   ► One-time setup SQL (run in the Supabase SQL editor):
+       create table south32_items (
+         id text primary key,
+         pos int,
+         data jsonb,
+         updated_at timestamptz default now()
+       );
+       alter table south32_items enable row level security;
+       create policy "public read"  on south32_items for select using (true);
+       create policy "public write" on south32_items for all    using (true) with check (true);
+       alter publication supabase_realtime add table south32_items;
+   ============================================================ */
+const SUPABASE_URL = "https://xabzlhdqozvibpjgkxws.supabase.co";
+const SUPABASE_KEY = "sb_publishable_xG7KPvVEIlV9h7EYR9IgmA_ZPqyy-AO";
+const TABLE        = "south32_items";
+const META_ID      = "__meta__";
+const META_V       = 1;
+
+const KEY="dm_south32_register_v1";
+let mem=null;
+const store={
+  load(){ try{const v=localStorage.getItem(KEY);return v?JSON.parse(v):null;}catch(e){return mem;} },
+  save(o){ try{localStorage.setItem(KEY,JSON.stringify(o));}catch(e){mem=o;} }
+};
+
+let sb=null, MODE="local";
+if(SUPABASE_URL && SUPABASE_KEY && window.supabase){
+  try{ sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY); MODE="cloud"; }
+  catch(e){ MODE="local"; }
+}
+const cloud=()=>MODE==="cloud";
+
+let saved = store.load();
+let state = (saved && saved.rows) ? saved.rows : seed();
+let meta  = (saved && saved.meta) ? saved.meta : {};
+state.forEach((r,i)=>{ if(r.pos==null) r.pos=i; });
+
+/* ============================================================
+   SAVE  ——  routes to Supabase (cloud) or localStorage (local)
+   ============================================================ */
+const projFields=["pClient","pSite","pTitle","pPrep","pDisc","pPo"];
+function collectMeta(){const m={};projFields.forEach(id=>m[id]=document.getElementById(id).value);return m;}
+
+function setSync(kind){
+  const dot=document.getElementById("saveDot"), t=document.getElementById("saveTxt");
+  dot.classList.remove("dirty","err");
+  if(kind==="saving"){dot.classList.add("dirty");t.textContent=cloud()?"Syncing…":"Saving…";}
+  else if(kind==="err"){dot.classList.add("err");t.textContent="Offline — saved locally";}
+  else{t.textContent=cloud()?"Synced with team":"Saved in this browser";}
+}
+function persistLocal(){ store.save({rows:state, meta:collectMeta(), ts:Date.now()}); }
+function toRow(r){ return {id:r.id, pos:(r.pos==null?0:r.pos), data:r, updated_at:new Date().toISOString()}; }
+
+const selfWrites=new Set();
+
+async function saveRow(r){
+  persistLocal();
+  if(!cloud()){ setSync("ok"); return; }
+  setSync("saving"); selfWrites.add(r.id);
+  const {error}=await sb.from(TABLE).upsert(toRow(r),{onConflict:"id"});
+  setSync(error?"err":"ok");
+}
+async function deleteRow(id){
+  state=state.filter(x=>x.id!==id); persistLocal();
+  if(!cloud()){ setSync("ok"); return; }
+  setSync("saving"); selfWrites.add(id);
+  const {error}=await sb.from(TABLE).delete().eq("id",id);
+  setSync(error?"err":"ok");
+}
+async function saveAll(){
+  persistLocal();
+  if(!cloud()){ setSync("ok"); return; }
+  setSync("saving");
+  const rows=state.map(toRow); rows.forEach(x=>selfWrites.add(x.id));
+  const {error}=await sb.from(TABLE).upsert(rows,{onConflict:"id"});
+  setSync(error?"err":"ok");
+}
+
+const rowTimers={};
+function queueRowSave(r){
+  setSync("saving");
+  clearTimeout(rowTimers[r.id]);
+  rowTimers[r.id]=setTimeout(()=>saveRow(r),400);
+}
+let metaTimer=null;
+function queueMetaSave(){
+  setSync("saving"); meta=collectMeta();
+  clearTimeout(metaTimer);
+  metaTimer=setTimeout(async ()=>{
+    persistLocal();
+    if(!cloud()){ setSync("ok"); return; }
+    selfWrites.add(META_ID);
+    const {error}=await sb.from(TABLE).upsert({id:META_ID,pos:-1,data:{...meta,_v:META_V},updated_at:new Date().toISOString()},{onConflict:"id"});
+    setSync(error?"err":"ok");
+  },500);
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+const tbody=document.getElementById("tbody");
+const q=document.getElementById("q"), fStatus=document.getElementById("fStatus");
+
+function txt(r,field,cls){
+  const i=document.createElement("input");i.className="txt"+(cls?" "+cls:"");i.value=r[field]||"";i.dataset.f=field;
+  return i;
+}
+function mk(cls,node){const td=document.createElement("td");td.className=cls;const c=document.createElement("div");c.className="cell";c.appendChild(node);td.appendChild(c);return td;}
+
+function statusCell(r){
+  const s=SMAP[r.status]||STATUS[0];
+  const td=document.createElement("td");td.className="status";
+  const wrap=document.createElement("div");wrap.className="status-wrap";
+  const pill=document.createElement("span");pill.className="pill "+s.cls;pill.textContent=s.code;pill.title=s.label;
+  const sel=document.createElement("select");sel.className="status-sel";sel.dataset.f="status";
+  STATUS.forEach(o=>{const op=document.createElement("option");op.value=o.code;op.textContent=o.code+" — "+o.label;if(o.code===r.status)op.selected=true;sel.appendChild(op);});
+  wrap.appendChild(pill);wrap.appendChild(sel);td.appendChild(wrap);
+  return td;
+}
+
+function buildRow(r,visualIdx){
+  const tr=document.createElement("tr");tr.dataset.id=r.id;
+
+  const tdA=document.createElement("td");tdA.className="act no-print";
+  tdA.innerHTML='<button class="del" title="Delete"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+  tr.appendChild(tdA);
+
+  const tdIdx=document.createElement("td");tdIdx.className="idx";tdIdx.textContent=visualIdx;tr.appendChild(tdIdx);
+
+  tr.appendChild(mk("client",txt(r,"client")));
+  tr.appendChild(mk("project",txt(r,"project")));
+  tr.appendChild(mk("desc",txt(r,"desc")));
+  tr.appendChild(statusCell(r));
+  tr.appendChild(mk("po",txt(r,"po")));
+  return tr;
+}
+
+function passFilter(r){
+  const term=q.value.trim().toLowerCase();
+  if(term && !((r.project+" "+r.desc+" "+r.po).toLowerCase().includes(term))) return false;
+  if(fStatus.value && r.status!==fStatus.value) return false;
+  return true;
+}
+
+function render(){
+  tbody.innerHTML="";
+  const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).filter(passFilter);
+  if(!rows.length){
+    const tr=document.createElement("tr");tr.className="empty";
+    tr.innerHTML='<td colspan="7">No projects match your filters.</td>';
+    tbody.appendChild(tr);return dashboard();
+  }
+  let n=0;
+  rows.forEach(r=>{n++;tbody.appendChild(buildRow(r,n));});
+  dashboard();
+}
+
+/* ---- dashboard ---- */
+function dashboard(){
+  const counts={WIP:0,P1:0,IFA:0,IFC:0,HOLD:0};
+  let sum=0;
+  state.forEach(r=>{counts[r.status]=(counts[r.status]||0)+1;sum+=(SWEIGHT[r.status]||0);});
+  const overall=state.length?Math.round(sum/state.length):0;
+  document.getElementById("dash").innerHTML=`
+    <div class="stat"><div class="n">${state.length}</div><div class="l">Total projects</div></div>
+    <div class="stat"><div class="n" style="color:var(--s-wip)">${counts.WIP}</div><div class="l">Work in progress</div></div>
+    <div class="stat"><div class="n" style="color:var(--s-p1)">${counts.P1}</div><div class="l">Site review (P1)</div></div>
+    <div class="stat"><div class="n" style="color:var(--s-ifa)">${counts.IFA}</div><div class="l">Issued for approval</div></div>
+    <div class="stat"><div class="n" style="color:var(--s-ifc)">${counts.IFC}</div><div class="l">Iss. for construction</div></div>
+    <div class="stat"><div class="n" style="color:var(--s-hold)">${counts.HOLD}</div><div class="l">On hold</div></div>
+    <div class="stat progress"><div class="n">${overall}%<small>overall completion</small></div><div class="bar"><i style="width:${overall}%"></i></div></div>`;
+}
+
+/* ---- legend ---- */
+function buildLegend(){
+  document.getElementById("legend").innerHTML=STATUS.map(s=>`<span class="pill ${s.cls}">${s.code} — ${s.label}</span>`).join("");
+}
+
+/* ============================================================
+   EDIT HANDLING
+   ============================================================ */
+function getRow(id){return state.find(r=>r.id===id);}
+tbody.addEventListener("input",e=>{
+  const f=e.target.dataset.f; if(!f) return;
+  const tr=e.target.closest("tr"); const r=getRow(tr.dataset.id); if(!r) return;
+  r[f]=e.target.value; queueRowSave(r);
+  if(f==="status"){
+    const s=SMAP[r.status]||STATUS[0];
+    const pill=tr.querySelector(".pill"); if(pill){pill.className="pill "+s.cls;pill.textContent=s.code;pill.title=s.label;}
+    dashboard();
+  }
+});
+tbody.addEventListener("click",e=>{
+  const btn=e.target.closest(".del"); if(!btn) return;
+  const tr=e.target.closest("tr"); const r=getRow(tr.dataset.id);
+  if(confirm("Delete "+(r.project||"this project")+"?")){ deleteRow(r.id); render(); }
+});
+
+/* ---- add row ---- */
+document.getElementById("addRow").addEventListener("click",()=>{
+  const maxPos=state.reduce((m,r)=>Math.max(m,r.pos||0),0);
+  const nr={id:"s"+Date.now(),pos:maxPos+1,client:document.getElementById("pClient").value.toUpperCase()||"SOUTH 32",project:"",desc:"",status:"WIP",po:""};
+  state.push(nr);saveRow(nr);render();
+  const sc=document.querySelector(".table-scroll");sc.scrollTop=sc.scrollHeight;
+});
+
+/* ============================================================
+   EXPORT (Excel)
+   ============================================================ */
+function tstamp(){return new Date().toISOString().slice(0,16).replace("T","_").replace(":","");}
+document.getElementById("exCsv").addEventListener("click",()=>{
+  if(!state.length){toast("Nothing to export");return;}
+  const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).map((r,i)=>({
+    "#":i+1, "Client":r.client, "Project":r.project, "Description":r.desc,
+    "Status":r.status, "Status (full)":(SMAP[r.status]||{}).label||"", "PO":r.po
+  }));
+  const ws=XLSX.utils.json_to_sheet(rows);
+  ws["!cols"]=[{wch:5},{wch:11},{wch:52},{wch:60},{wch:8},{wch:24},{wch:14}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"South32 Register");
+  XLSX.writeFile(wb,"South32_Tracking_Register_"+tstamp()+".xlsx");
+  toast("Excel exported");
+});
+
+/* ============================================================
+   CLIENT PDF  ——  DM-branded new-window print
+   ============================================================ */
+const BADGE={wip:["#FBE0D0","#9C4A1A"],p1:["#DCE7F3","#1F3864"],ifa:["#FFE066","#5C4A00"],ifc:["#E2EFDA","#375623"],hold:["#E4E4E4","#5f5f5f"]};
+function esc(s){return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+
+document.getElementById("pdfBtn").addEventListener("click",()=>{
+  if(!state.length){toast("Nothing to issue");return;}
+  const M=collectMeta();
+  const now=new Date();
+  const printedAt=now.toLocaleDateString("en-AU",{day:"2-digit",month:"long",year:"numeric"})+" "+now.toLocaleTimeString("en-AU",{hour:"2-digit",minute:"2-digit",hour12:true});
+  const c={WIP:0,P1:0,IFA:0,IFC:0,HOLD:0}; state.forEach(r=>c[r.status]=(c[r.status]||0)+1);
+  const ordered=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0));
+
+  const rows=ordered.map((r,i)=>{
+    const s=SMAP[r.status]||STATUS[0]; const b=BADGE[s.cls];
+    return '<tr>'
+      +'<td style="text-align:center;font-weight:700">'+(i+1)+'</td>'
+      +'<td style="font-weight:700">'+esc(r.client)+'</td>'
+      +'<td style="font-weight:700;color:#1F3864">'+esc(r.project)+'</td>'
+      +'<td>'+esc(r.desc)+'</td>'
+      +'<td style="text-align:center"><span class="badge" style="background:'+b[0]+';color:'+b[1]+'">'+esc(r.status)+'</span></td>'
+      +'<td style="font-family:monospace;text-align:center">'+esc(r.po)+'</td>'
+      +'</tr>';
+  }).join("");
+
+  const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>South32 Tracking Register</title><style>'
+    +'@page{size:A4 landscape;margin:9mm}'
+    +'*{box-sizing:border-box;margin:0;padding:0}'
+    +'body{font-family:Arial,sans-serif;font-size:9px;color:#23201F}'
+    +'.hdr{background:#23201F;color:#fff;display:flex;overflow:hidden;margin-bottom:8px;border-radius:4px}'
+    +'.hdr-bar{background:#FDD300;width:8px;flex-shrink:0}'
+    +'.hdr-inner{flex:1;padding:11px 16px;display:flex;justify-content:space-between;align-items:center}'
+    +'.hdr-title{font-size:15px;font-weight:700;color:#fff;margin-bottom:2px}'
+    +'.hdr-sub{font-size:9px;color:rgba(255,255,255,0.6)}'
+    +'.hdr-right{text-align:right;font-size:8.5px;color:rgba(255,255,255,0.72);line-height:1.7}'
+    +'.hdr-right strong{color:#FDD300}'
+    +'.summary{display:flex;border:1px solid #e0e0e0;border-radius:4px;overflow:hidden;margin-bottom:8px}'
+    +'.sum-item{flex:1;text-align:center;padding:6px;border-right:1px solid #e0e0e0}'
+    +'.sum-item:last-child{border-right:none}'
+    +'.sum-label{font-size:7px;text-transform:uppercase;color:#4E4E4E;font-weight:700;margin-bottom:2px;letter-spacing:.4px}'
+    +'.sum-val{font-size:16px;font-weight:700}'
+    +'table{width:100%;border-collapse:collapse}'
+    +'th{background:#23201F;color:#fff;padding:6px 6px;text-align:left;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.3px}'
+    +'th:first-child{border-left:3px solid #FDD300}'
+    +'td{padding:4px 6px;border-bottom:1px solid #ebebeb;font-size:9px;vertical-align:top}'
+    +'tr:nth-child(even) td{background:#fafafa}'
+    +'.badge{display:inline-block;padding:2px 8px;border-radius:9px;font-size:8px;font-weight:800;white-space:nowrap}'
+    +'.footer{margin-top:8px;font-size:8px;color:#999;border-top:2px solid #FDD300;padding-top:5px;display:flex;justify-content:space-between}'
+    +'</style></head><body>'
+    +'<div class="hdr"><div class="hdr-bar"></div><div class="hdr-inner">'
+    +'<div><div class="hdr-title">DM GROUP — South32 Project Tracking Register</div>'
+    +'<div class="hdr-sub">'+esc(M.pSite||"Cannington (CNN)")+' &nbsp;·&nbsp; '+esc(M.pTitle||"Project Tracking Register")+'</div></div>'
+    +'<div class="hdr-right">Client: <strong>'+esc(M.pClient||"South32")+'</strong> &nbsp; Prepared by: <strong>'+esc(M.pPrep||"DM Group")+'</strong><br>'
+    +'Printed: '+printedAt+' &nbsp; Projects: <strong>'+state.length+'</strong></div>'
+    +'</div></div>'
+    +'<div class="summary">'
+    +'<div class="sum-item"><div class="sum-label">Total</div><div class="sum-val" style="color:#23201F">'+state.length+'</div></div>'
+    +'<div class="sum-item"><div class="sum-label">WIP</div><div class="sum-val" style="color:#9C4A1A">'+c.WIP+'</div></div>'
+    +'<div class="sum-item"><div class="sum-label">Site Review (P1)</div><div class="sum-val" style="color:#1F3864">'+c.P1+'</div></div>'
+    +'<div class="sum-item"><div class="sum-label">Issued for Approval</div><div class="sum-val" style="color:#5C4A00">'+c.IFA+'</div></div>'
+    +'<div class="sum-item"><div class="sum-label">Iss. for Construction</div><div class="sum-val" style="color:#375623">'+c.IFC+'</div></div>'
+    +'<div class="sum-item"><div class="sum-label">On Hold</div><div class="sum-val" style="color:#5f5f5f">'+c.HOLD+'</div></div>'
+    +'</div>'
+    +'<table><thead><tr>'
+    +'<th style="width:24px">#</th><th style="width:70px">Client</th>'
+    +'<th style="width:300px">Project</th><th>Description</th>'
+    +'<th style="width:70px;text-align:center">Status</th><th style="width:90px;text-align:center">PO</th>'
+    +'</tr></thead><tbody>'+rows+'</tbody></table>'
+    +'<div class="footer"><span>DM Group — Confidential — South32 '+esc(M.pSite||"Cannington")+'</span><span>dm-group.com.au &nbsp;·&nbsp; BUILD IT BETTER!</span></div>'
+    +'<scr'+'ipt>window.onload=function(){window.print();}<\/scr'+'ipt>'
+    +'</body></html>';
+
+  const w=window.open("","_blank");
+  if(!w){toast("Allow pop-ups to issue the PDF");return;}
+  w.document.write(html); w.document.close();
+});
+
+/* ---- toast ---- */
+let toastTimer=null;
+function toast(msg){
+  const el=document.getElementById("toast");
+  el.textContent=msg; el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove("show"),2500);
+}
+
+/* ============================================================
+   WIRING
+   ============================================================ */
+STATUS.forEach(s=>{const o=document.createElement("option");o.value=s.code;o.textContent=s.code+" — "+s.label;fStatus.appendChild(o);});
+[q,fStatus].forEach(el=>el.addEventListener("input",render));
+projFields.forEach(id=>document.getElementById(id).addEventListener("input",queueMetaSave));
+
+if(meta&&Object.keys(meta).length){projFields.forEach(id=>{if(meta[id]!=null)document.getElementById(id).value=meta[id];});}
+buildLegend();render();setSync("ok");
+
+/* ============================================================
+   CLOUD LOAD + LIVE SYNC
+   ============================================================ */
+function applyMeta(m){
+  if(!m) return;
+  projFields.forEach(id=>{ if(m[id]!=null && (!document.activeElement||document.activeElement.id!==id)) document.getElementById(id).value=m[id]; });
+}
+
+async function cloudLoad(){
+  if(!cloud()) return;
+  setSync("saving");
+  const {data,error}=await sb.from(TABLE).select("*").order("pos",{ascending:true});
+  if(error){ setSync("err"); return; }
+  if(!data.length){
+    await saveAll();
+    selfWrites.add(META_ID);
+    await sb.from(TABLE).upsert({id:META_ID,pos:-1,data:{...collectMeta(),_v:META_V},updated_at:new Date().toISOString()},{onConflict:"id"});
+    setSync("ok"); return;
+  }
+  state = data.filter(r=>r.id!==META_ID).map(r=>({...r.data, id:r.id, pos:r.pos}));
+  const metaRow=data.find(r=>r.id===META_ID);
+  persistLocal();
+  if(metaRow) applyMeta(metaRow.data||{});
+  render(); setSync("ok");
+}
+
+let pendingRemote=false;
+function editingTable(){ const a=document.activeElement; return a && tbody.contains(a) && /INPUT|SELECT/.test(a.tagName); }
+function reconcile(){ if(pendingRemote && !editingTable()){ pendingRemote=false; render(); } }
+document.addEventListener("focusout",()=>setTimeout(reconcile,120));
+
+function onRemote(payload){
+  const row=payload.new || payload.old; if(!row) return;
+  const id=row.id;
+  if(selfWrites.has(id)){ selfWrites.delete(id); return; }
+  if(id===META_ID){ if(payload.new) applyMeta(payload.new.data); return; }
+  if(payload.eventType==="DELETE"){
+    state=state.filter(x=>x.id!==id);
+  }else{
+    const rec={...payload.new.data, id, pos:payload.new.pos};
+    const i=state.findIndex(x=>x.id===id);
+    if(i>=0) state[i]=rec; else state.push(rec);
+  }
+  state.sort((a,b)=>(a.pos||0)-(b.pos||0));
+  persistLocal();
+  pendingRemote=true; reconcile();
+}
+
+if(cloud()){
+  cloudLoad();
+  sb.channel("south32-live")
+    .on("postgres_changes",{event:"*",schema:"public",table:TABLE},onRemote)
+    .subscribe();
+}
+</script>
+</body>
+</html>
