@@ -303,7 +303,6 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
           <th>Client</th>
           <th>Project</th>
           <th>Description</th>
-          <th class="ms">Received Project Info</th>
           <th class="ms">IFA Package Issued</th>
           <th class="ms">IFA Return Comments</th>
           <th class="ms">IFC Package Issued</th>
@@ -341,7 +340,6 @@ const SWEIGHT = {WIP:35, P1:60, IFA:80, HOLD:50, IFC:100};
 
 /* Deliverable workflow milestones (in order) */
 const MILESTONES = [
-  {f:"rxInfo",     label:"Received Project Info"},
   {f:"ifaIssued",  label:"IFA Package Issued"},
   {f:"ifaComments",label:"IFA Return Comments"},
   {f:"ifcIssued",  label:"IFC Package Issued"},
@@ -392,7 +390,7 @@ function seed(){
   return RAW.map((r,i)=>({
     id:"s"+(i+1), pos:i,
     client:r[0], project:r[1], desc:r[2], po:r[4],
-    rxInfo:"", ifaIssued:"", ifaComments:"", ifcIssued:"",
+    ifaIssued:"", ifaComments:"", ifcIssued:"",
     manual:r[3]   // current status pinned as manual until real dates are entered
   }));
 }
@@ -561,7 +559,7 @@ function render(){
   const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).filter(passFilter);
   if(!rows.length){
     const tr=document.createElement("tr");tr.className="empty";
-    tr.innerHTML='<td colspan="11">No projects match your filters.</td>';
+    tr.innerHTML='<td colspan="10">No projects match your filters.</td>';
     tbody.appendChild(tr);return dashboard();
   }
   let n=0;
@@ -618,7 +616,7 @@ tbody.addEventListener("click",e=>{
 /* ---- add row ---- */
 document.getElementById("addRow").addEventListener("click",()=>{
   const maxPos=state.reduce((m,r)=>Math.max(m,r.pos||0),0);
-  const nr={id:"s"+Date.now(),pos:maxPos+1,client:document.getElementById("pClient").value.toUpperCase()||"SOUTH 32",project:"",desc:"",po:"",rxInfo:"",ifaIssued:"",ifaComments:"",ifcIssued:"",manual:""};
+  const nr={id:"s"+Date.now(),pos:maxPos+1,client:document.getElementById("pClient").value.toUpperCase()||"SOUTH 32",project:"",desc:"",po:"",ifaIssued:"",ifaComments:"",ifcIssued:"",manual:""};
   state.push(nr);saveRow(nr);render();
   const sc=document.querySelector(".table-scroll");sc.scrollTop=sc.scrollHeight;
 });
@@ -633,7 +631,6 @@ document.getElementById("exCsv").addEventListener("click",()=>{
     const code=effectiveStatus(r);
     return {
       "#":i+1, "Client":r.client, "Project":r.project, "Description":r.desc,
-      "Received Project Info":r.rxInfo||"",
       "IFA Package Issued":r.ifaIssued||"", "IFA Return Comments":r.ifaComments||"",
       "IFC Package Issued":r.ifcIssued||"",
       "Status":code, "Status (full)":(SMAP[code]||{}).label||"",
@@ -641,7 +638,7 @@ document.getElementById("exCsv").addEventListener("click",()=>{
     };
   });
   const ws=XLSX.utils.json_to_sheet(rows);
-  ws["!cols"]=[{wch:5},{wch:11},{wch:50},{wch:56},{wch:16},{wch:16},{wch:17},{wch:16},{wch:8},{wch:24},{wch:13},{wch:13}];
+  ws["!cols"]=[{wch:5},{wch:11},{wch:50},{wch:56},{wch:16},{wch:17},{wch:16},{wch:8},{wch:24},{wch:13},{wch:13}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,"South32 Register");
   XLSX.writeFile(wb,"South32_Tracking_Register_"+tstamp()+".xlsx");
@@ -670,7 +667,6 @@ document.getElementById("pdfBtn").addEventListener("click",()=>{
       +'<td style="font-weight:700">'+esc(r.client)+'</td>'
       +'<td style="font-weight:700;color:#1F3864">'+esc(r.project)+'</td>'
       +'<td>'+esc(r.desc)+'</td>'
-      +'<td style="text-align:center;font-size:8px">'+fmtD(r.rxInfo)+'</td>'
       +'<td style="text-align:center;font-size:8px">'+fmtD(r.ifaIssued)+'</td>'
       +'<td style="text-align:center;font-size:8px">'+fmtD(r.ifaComments)+'</td>'
       +'<td style="text-align:center;font-size:8px">'+fmtD(r.ifcIssued)+'</td>'
@@ -720,7 +716,6 @@ document.getElementById("pdfBtn").addEventListener("click",()=>{
     +'<table><thead><tr>'
     +'<th style="width:20px">#</th><th style="width:58px">Client</th>'
     +'<th style="width:210px">Project</th><th>Description</th>'
-    +'<th style="width:46px;text-align:center">Rx Info</th>'
     +'<th style="width:46px;text-align:center">IFA Iss</th>'
     +'<th style="width:46px;text-align:center">IFA Ret</th>'
     +'<th style="width:46px;text-align:center">IFC Iss</th>'
