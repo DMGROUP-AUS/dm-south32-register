@@ -97,6 +97,7 @@
   --s-ifa:#5C4A00;  --s-ifa-bg:#FFE066;   /* Issued for Approval— amber   */
   --s-ifc:#375623;  --s-ifc-bg:#E2EFDA;   /* Iss. for Construct.— green   */
   --s-hold:#5f5f5f; --s-hold-bg:#E4E4E4;  /* On Hold            — grey    */
+  --s-pend:#5B4B8A; --s-pend-bg:#EAE6F7;  /* Job Pending        — indigo  */
 
   --radius:6px;
   --shadow:0 1px 2px rgba(35,32,31,.06), 0 4px 16px rgba(35,32,31,.07);
@@ -176,7 +177,8 @@ select.filter{height:36px;border:1px solid var(--line);border-radius:7px;backgro
 .table-wrap{max-width:1500px;margin:14px auto 40px;padding:0 22px}
 .table-scroll{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
   overflow:auto;max-height:calc(100vh - 300px);min-height:300px}
-table{border-collapse:separate;border-spacing:0;width:100%;min-width:960px}
+table{border-collapse:separate;border-spacing:0;width:100%;min-width:1780px}
+table.ms-collapsed{min-width:1200px}
 thead{position:sticky;top:0;z-index:3}
 thead th{background:var(--brand);color:#dfe7ef;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;
   text-align:left;padding:10px 10px;white-space:nowrap;border-bottom:2px solid var(--accent);vertical-align:bottom}
@@ -191,7 +193,7 @@ td.project .cell input.txt{font-weight:700;color:var(--navy)}
 td.desc{min-width:300px;max-width:480px}
 td.desc .cell{align-items:flex-start}
 td.desc textarea.txt{resize:none;overflow:hidden;line-height:1.35;white-space:pre-wrap;word-break:break-word;min-height:20px}
-td.po{width:120px}
+td.po{width:130px;min-width:130px}
 td.po .cell input.txt{font-family:var(--mono);font-size:11.5px;color:var(--ink-2)}
 td .cell input.txt,td .cell textarea.txt{border:none;background:transparent;font-family:inherit;font-size:12.5px;color:var(--ink);width:100%;padding:0}
 td .cell input.txt:focus,td .cell textarea.txt:focus{outline:none}
@@ -207,6 +209,7 @@ td.status{width:150px}
 .pill.ifa{color:var(--s-ifa);background:var(--s-ifa-bg)}
 .pill.ifc{color:var(--s-ifc);background:var(--s-ifc-bg)}
 .pill.hold{color:var(--s-hold);background:var(--s-hold-bg)}
+.pill.pend{color:var(--s-pend);background:var(--s-pend-bg)}
 .status-sel{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-family:inherit}
 .status-wrap .lockdot{position:absolute;top:3px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--ink-2);opacity:0;pointer-events:none;box-shadow:0 0 0 2px #fff}
 .status-wrap.manual .lockdot{opacity:.85}
@@ -376,6 +379,7 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
    STATUS DEFINITIONS
    ============================================================ */
 const STATUS = [
+  {code:"PEND", cls:"pend", label:"Job Pending"},
   {code:"WIP",  cls:"wip",  label:"Work in Progress"},
   {code:"P1",   cls:"p1",   label:"Site Review (P1)"},
   {code:"IFA",  cls:"ifa",  label:"Issued for Approval"},
@@ -384,7 +388,7 @@ const STATUS = [
 ];
 const SMAP = Object.fromEntries(STATUS.map(s=>[s.code,s]));
 /* progress weight per status — drives the overall completion bar */
-const SWEIGHT = {WIP:35, P1:60, IFA:80, HOLD:50, IFC:100};
+const SWEIGHT = {PEND:0, WIP:35, P1:60, IFA:80, HOLD:50, IFC:100};
 
 /* Deliverable workflow milestones (in order) */
 const MILESTONES = [
@@ -404,7 +408,8 @@ function pctVal(v){ v=parseInt(v,10); return isNaN(v)?0:Math.max(0,Math.min(100,
 function derivedStatus(r){
   if(r.ifcIssued) return "IFC";
   if(r.ifaComments || r.ifaIssued) return "IFA";
-  return "WIP";                 // project info / PO received, or nothing yet
+  if(pctVal(r.shopModel)>0 || pctVal(r.shopDetail)>0) return "WIP";
+  return "PEND";                // nothing started yet
 }
 function effectiveStatus(r){
   return (r.manual && SMAP[r.manual]) ? r.manual : derivedStatus(r);
@@ -647,12 +652,13 @@ function render(){
 
 /* ---- dashboard ---- */
 function dashboard(){
-  const counts={WIP:0,P1:0,IFA:0,IFC:0,HOLD:0};
+  const counts={PEND:0,WIP:0,P1:0,IFA:0,IFC:0,HOLD:0};
   let sum=0;
   state.forEach(r=>{const c=effectiveStatus(r);counts[c]=(counts[c]||0)+1;sum+=(SWEIGHT[c]||0);});
   const overall=state.length?Math.round(sum/state.length):0;
   document.getElementById("dash").innerHTML=`
     <div class="stat"><div class="n">${state.length}</div><div class="l">Total projects</div></div>
+    <div class="stat"><div class="n" style="color:var(--s-pend)">${counts.PEND}</div><div class="l">Job pending</div></div>
     <div class="stat"><div class="n" style="color:var(--s-wip)">${counts.WIP}</div><div class="l">Work in progress</div></div>
     <div class="stat"><div class="n" style="color:var(--s-p1)">${counts.P1}</div><div class="l">Site review (P1)</div></div>
     <div class="stat"><div class="n" style="color:var(--s-ifa)">${counts.IFA}</div><div class="l">Issued for approval</div></div>
@@ -753,7 +759,7 @@ document.getElementById("exCsv").addEventListener("click",()=>{
 /* ============================================================
    CLIENT PDF  ——  DM-branded new-window print
    ============================================================ */
-const BADGE={wip:["#FBE0D0","#9C4A1A"],p1:["#DCE7F3","#1F3864"],ifa:["#FFE066","#5C4A00"],ifc:["#E2EFDA","#375623"],hold:["#E4E4E4","#5f5f5f"]};
+const BADGE={pend:["#EAE6F7","#5B4B8A"],wip:["#FBE0D0","#9C4A1A"],p1:["#DCE7F3","#1F3864"],ifa:["#FFE066","#5C4A00"],ifc:["#E2EFDA","#375623"],hold:["#E4E4E4","#5f5f5f"]};
 function esc(s){return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 
 document.getElementById("pdfBtn").addEventListener("click",()=>{
@@ -761,7 +767,7 @@ document.getElementById("pdfBtn").addEventListener("click",()=>{
   const M=collectMeta();
   const now=new Date();
   const printedAt=now.toLocaleDateString("en-AU",{day:"2-digit",month:"long",year:"numeric"})+" "+now.toLocaleTimeString("en-AU",{hour:"2-digit",minute:"2-digit",hour12:true});
-  const c={WIP:0,P1:0,IFA:0,IFC:0,HOLD:0}; state.forEach(r=>{const k=effectiveStatus(r);c[k]=(c[k]||0)+1;});
+  const c={PEND:0,WIP:0,P1:0,IFA:0,IFC:0,HOLD:0}; state.forEach(r=>{const k=effectiveStatus(r);c[k]=(c[k]||0)+1;});
   const fmtD=d=>d?new Date(d+"T00:00").toLocaleDateString("en-AU",{day:"2-digit",month:"short",year:"2-digit"}):"—";
   const ordered=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0));
 
@@ -814,6 +820,7 @@ document.getElementById("pdfBtn").addEventListener("click",()=>{
     +'</div></div>'
     +'<div class="summary">'
     +'<div class="sum-item"><div class="sum-label">Total</div><div class="sum-val" style="color:#23201F">'+state.length+'</div></div>'
+    +'<div class="sum-item"><div class="sum-label">Job Pending</div><div class="sum-val" style="color:#5B4B8A">'+c.PEND+'</div></div>'
     +'<div class="sum-item"><div class="sum-label">WIP</div><div class="sum-val" style="color:#9C4A1A">'+c.WIP+'</div></div>'
     +'<div class="sum-item"><div class="sum-label">Site Review (P1)</div><div class="sum-val" style="color:#1F3864">'+c.P1+'</div></div>'
     +'<div class="sum-item"><div class="sum-label">Issued for Approval</div><div class="sum-val" style="color:#5C4A00">'+c.IFA+'</div></div>'

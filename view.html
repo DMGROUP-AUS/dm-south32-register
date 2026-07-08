@@ -18,6 +18,7 @@
   --s-ifa:#5C4A00;  --s-ifa-bg:#FFE066;
   --s-ifc:#375623;  --s-ifc-bg:#E2EFDA;
   --s-hold:#5f5f5f; --s-hold-bg:#E4E4E4;
+  --s-pend:#5B4B8A; --s-pend-bg:#EAE6F7;
   --shadow:0 1px 2px rgba(35,32,31,.06), 0 4px 16px rgba(35,32,31,.07);
   --font:Arial,"Helvetica Neue",Helvetica,sans-serif;
   --mono:"SFMono-Regular","Consolas","Roboto Mono",ui-monospace,monospace;
@@ -72,7 +73,8 @@ select.filter{height:36px;border:1px solid var(--line);border-radius:6px;backgro
 
 .table-wrap{max-width:1500px;margin:14px auto 40px;padding:0 22px}
 .table-scroll{background:var(--paper);border:1px solid var(--line);border-radius:6px;box-shadow:var(--shadow);overflow:auto;max-height:calc(100vh - 300px);min-height:300px}
-table{border-collapse:separate;border-spacing:0;width:100%;min-width:960px}
+table{border-collapse:separate;border-spacing:0;width:100%;min-width:1480px}
+table.ms-collapsed{min-width:980px}
 thead{position:sticky;top:0;z-index:3}
 thead th{background:var(--brand);color:#dfe7ef;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;
   text-align:left;padding:10px 10px;white-space:nowrap;border-bottom:2px solid var(--accent);vertical-align:bottom}
@@ -82,7 +84,7 @@ td.idx{text-align:center;color:var(--ink-3);font-family:var(--mono);font-size:11
 td.client{font-weight:700;color:var(--ink-2);text-transform:uppercase;font-size:11.5px;min-width:96px}
 td.project{font-weight:700;color:var(--navy);min-width:460px}
 td.desc{min-width:300px;max-width:480px;white-space:normal;word-break:break-word}
-td.po{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);width:120px}
+td.po{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);width:130px;min-width:130px;white-space:nowrap}
 td.status{width:110px}
 .pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;padding:4px 12px;border-radius:20px;white-space:nowrap;letter-spacing:.4px}
 .pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.85}
@@ -91,6 +93,7 @@ td.status{width:110px}
 .pill.ifa{color:var(--s-ifa);background:var(--s-ifa-bg)}
 .pill.ifc{color:var(--s-ifc);background:var(--s-ifc-bg)}
 .pill.hold{color:var(--s-hold);background:var(--s-hold-bg)}
+.pill.pend{color:var(--s-pend);background:var(--s-pend-bg)}
 thead th.ms{white-space:normal;line-height:1.15;text-align:center;padding:8px 6px;font-size:9.5px;width:100px;min-width:100px;max-width:100px}
 td.ms{width:100px;min-width:100px;max-width:100px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--ink-2);background:#f7f9fb}
 td.ms.done{background:#eef7ef;color:var(--ink)}
@@ -184,6 +187,7 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3)}
 
 <script>
 const STATUS=[
+  {code:"PEND",cls:"pend",label:"Job Pending"},
   {code:"WIP",cls:"wip",label:"Work in Progress"},
   {code:"P1",cls:"p1",label:"Site Review (P1)"},
   {code:"IFA",cls:"ifa",label:"Issued for Approval"},
@@ -191,10 +195,10 @@ const STATUS=[
   {code:"HOLD",cls:"hold",label:"On Hold"},
 ];
 const SMAP=Object.fromEntries(STATUS.map(s=>[s.code,s]));
-const SWEIGHT={WIP:35,P1:60,IFA:80,HOLD:50,IFC:100};
+const SWEIGHT={PEND:0,WIP:35,P1:60,IFA:80,HOLD:50,IFC:100};
 const MILESTONES=[{f:"ifaIssued"},{f:"ifaComments"},{f:"ifcIssued"}];
 const MSFIELDS=MILESTONES.map(m=>m.f);
-function derivedStatus(r){ if(r.ifcIssued) return "IFC"; if(r.ifaComments||r.ifaIssued) return "IFA"; return "WIP"; }
+function derivedStatus(r){ if(r.ifcIssued) return "IFC"; if(r.ifaComments||r.ifaIssued) return "IFA"; if(pctVal(r.shopModel)>0||pctVal(r.shopDetail)>0) return "WIP"; return "PEND"; }
 function effectiveStatus(r){ return (r.manual && SMAP[r.manual]) ? r.manual : derivedStatus(r); }
 function normalize(r){ MSFIELDS.forEach(k=>{ if(r[k]==null) r[k]=""; }); ["shopModel","shopDetail"].forEach(k=>{ if(r[k]==null) r[k]=""; }); if(r.manual==null){ r.manual=(r.status&&SMAP[r.status])?r.status:""; } return r; }
 function fmtD(d){ return d?new Date(d+"T00:00").toLocaleDateString("en-AU",{day:"2-digit",month:"short",year:"2-digit"}):"—"; }
@@ -242,11 +246,12 @@ function render(){
   dashboard();
 }
 function dashboard(){
-  const counts={WIP:0,P1:0,IFA:0,IFC:0,HOLD:0}; let sum=0;
+  const counts={PEND:0,WIP:0,P1:0,IFA:0,IFC:0,HOLD:0}; let sum=0;
   state.forEach(r=>{const c=effectiveStatus(r);counts[c]=(counts[c]||0)+1;sum+=(SWEIGHT[c]||0);});
   const overall=state.length?Math.round(sum/state.length):0;
   document.getElementById("dash").innerHTML=`
     <div class="stat"><div class="n">${state.length}</div><div class="l">Total projects</div></div>
+    <div class="stat"><div class="n" style="color:var(--s-pend)">${counts.PEND}</div><div class="l">Job pending</div></div>
     <div class="stat"><div class="n" style="color:var(--s-wip)">${counts.WIP}</div><div class="l">Work in progress</div></div>
     <div class="stat"><div class="n" style="color:var(--s-p1)">${counts.P1}</div><div class="l">Site review (P1)</div></div>
     <div class="stat"><div class="n" style="color:var(--s-ifa)">${counts.IFA}</div><div class="l">Issued for approval</div></div>
