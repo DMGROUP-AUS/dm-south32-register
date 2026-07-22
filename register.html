@@ -177,8 +177,8 @@ select.filter{height:36px;border:1px solid var(--line);border-radius:7px;backgro
 .table-wrap{max-width:1500px;margin:14px auto 40px;padding:0 22px}
 .table-scroll{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
   overflow:auto;max-height:calc(100vh - 300px);min-height:300px}
-table{border-collapse:separate;border-spacing:0;width:100%;min-width:1256px}
-table.ms-collapsed{min-width:786px}
+table{border-collapse:separate;border-spacing:0;width:100%;min-width:1436px}
+table.ms-collapsed{min-width:966px}
 thead{position:sticky;top:0;z-index:3}
 thead th{background:var(--brand);color:#dfe7ef;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;
   text-align:left;padding:10px 10px;white-space:nowrap;border-bottom:2px solid var(--accent);vertical-align:bottom}
@@ -199,6 +199,13 @@ td.desc{width:calc(58.5ch + 18px);min-width:calc(58.5ch + 18px);max-width:calc(5
 td.desc .cell{overflow:hidden}
 td.desc .cell input.txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 td.po{width:130px;min-width:130px}
+td.model{width:180px;min-width:180px;max-width:180px}
+td.model .cell{overflow:hidden;gap:4px}
+td.model .cell input.txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11.5px;color:var(--navy);text-decoration:underline;text-decoration-color:rgba(31,56,100,.35)}
+td.model .cell input.txt::placeholder{color:var(--ink-3);text-decoration:none}
+td.model .open{flex:none;width:22px;height:22px;display:grid;place-items:center;border:1px solid var(--line);border-radius:4px;background:#f5f5f5;color:var(--ink-2);cursor:pointer;text-decoration:none}
+td.model .open:hover{background:var(--accent);border-color:var(--accent-dark);color:var(--brand)}
+td.model .open.off{opacity:.3;pointer-events:none}
 td.po .cell input.txt{font-family:var(--mono);font-size:11.5px;color:var(--ink-2)}
 td .cell input.txt,td .cell textarea.txt{border:none;background:transparent;font-family:inherit;font-size:12.5px;color:var(--ink);width:100%;padding:0}
 td .cell input.txt:focus,td .cell textarea.txt:focus{outline:none}
@@ -374,6 +381,7 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
           <th class="ms">IFC Package Issued</th>
           <th>Status</th>
           <th>PO</th>
+          <th>Model Link</th>
         </tr>
       </thead>
       <tbody id="tbody"></tbody>
@@ -447,6 +455,7 @@ function normalize(r){
   }
   MSFIELDS.forEach(k=>{ if(r[k]==null) r[k]=""; });
   PCTFIELDS.forEach(k=>{ if(r[k]==null) r[k]=""; });
+  if(r.modelUrl==null) r.modelUrl="";
   if(r.manual==null){ r.manual = (r.status && SMAP[r.status]) ? r.status : ""; }
   delete r.status;
   return r;
@@ -479,7 +488,7 @@ function seed(){
   return RAW.map((r,i)=>({
     id:"s"+(i+1), pos:i,
     client:r[0], project:r[1], desc:r[2], po:r[4],
-    shopModel:"", shopDetail:"",
+    shopModel:"", shopDetail:"", modelUrl:"",
     ifaIssued:"", ifaComments:"", ifcIssued:"",
     manual:r[3]   // current status pinned as manual until real dates are entered
   }));
@@ -657,6 +666,17 @@ function pctCell(r,field){
   c.appendChild(i);td.appendChild(c);td.appendChild(bar);return td;
 }
 
+function modelHref(u){ u=(u||"").trim(); if(!u) return ""; return /^https?:\/\//i.test(u)?u:"https://"+u; }
+function modelCell(r){
+  const td=document.createElement("td");td.className="model";
+  const cell=document.createElement("div");cell.className="cell";
+  const i=document.createElement("input");i.className="txt";i.value=r.modelUrl||"";i.dataset.f="modelUrl";
+  i.placeholder="Paste viewer URL";i.title=r.modelUrl||"Paste the model web-viewer URL";
+  const a=document.createElement("a");a.className="open"+(r.modelUrl?"":" off");
+  a.target="_blank";a.rel="noopener";a.href=modelHref(r.modelUrl);a.title="Open model viewer";
+  a.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>';
+  cell.appendChild(i);cell.appendChild(a);td.appendChild(cell);return td;
+}
 function buildRow(r,visualIdx){
   const tr=document.createElement("tr");tr.dataset.id=r.id;
 
@@ -677,6 +697,7 @@ function buildRow(r,visualIdx){
   MILESTONES.forEach(m=>tr.appendChild(dateCell(r,m.f)));
   tr.appendChild(statusCell(r));
   tr.appendChild(mk("po",txt(r,"po")));
+  tr.appendChild(modelCell(r));
   return tr;
 }
 
@@ -696,7 +717,7 @@ function groupHeaderRow(code,count){
   const a=AMAP[code]; const gkey=code||"__none"; const collapsed=collapsedGroups.has(gkey);
   const color=a?(AREA_COLOR[a.cls]||"#8a8a8a"):"#b6b6b6";
   const tr=document.createElement("tr");tr.className="grouphdr"+(collapsed?" collapsed":"");tr.dataset.group=gkey;
-  const td=document.createElement("td");td.colSpan=13;
+  const td=document.createElement("td");td.colSpan=14;
   td.innerHTML='<div class="ghinner"><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
     +'<span class="gdot" style="background:'+color+'"></span>'
     +'<span class="gname">'+(a?a.label:"Unassigned")+'</span>'
@@ -708,7 +729,7 @@ function render(){
   const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).filter(passFilter);
   if(!rows.length){
     const tr=document.createElement("tr");tr.className="empty";
-    tr.innerHTML='<td colspan="13">No projects match your filters.</td>';
+    tr.innerHTML='<td colspan="14">No projects match your filters.</td>';
     tbody.appendChild(tr);updateBulk();return dashboard();
   }
   const order=[...AREAS.map(a=>a.code),""];
@@ -780,6 +801,7 @@ tbody.addEventListener("input",e=>{
   const f=e.target.dataset.f; if(!f) return;
   const tr=e.target.closest("tr"); const r=getRow(tr.dataset.id); if(!r) return;
   r[f]=e.target.value; queueRowSave(r);
+  if(f==="modelUrl"){ const a=tr.querySelector("td.model .open"); if(a){ a.href=modelHref(r.modelUrl); a.classList.toggle("off",!r.modelUrl); } e.target.title=r.modelUrl||"Paste the model web-viewer URL"; }
   if(f==="area"){ const tag=tr.querySelector(".areatag"); const a=AMAP[r.area]; if(tag){ tag.className="areatag"+(a?" area-"+a.cls:" empty"); tag.textContent=a?a.code:"—"; tag.title=a?a.label:"Set area"; } }
   if(e.target.tagName==="TEXTAREA") autoGrow(e.target);
   if(e.target.dataset.pct){ const td=e.target.closest("td"), bar=td&&td.querySelector(".pctbar"); if(bar) bar.style.width=pctVal(r[f])+"%"; }
@@ -805,7 +827,7 @@ tbody.addEventListener("click",e=>{
 /* ---- add row ---- */
 document.getElementById("addRow").addEventListener("click",()=>{
   const maxPos=state.reduce((m,r)=>Math.max(m,r.pos||0),0);
-  const nr={id:"s"+Date.now(),pos:maxPos+1,area:"",project:"",desc:"",po:"",shopModel:"",shopDetail:"",ifaIssued:"",ifaComments:"",ifcIssued:"",manual:""};
+  const nr={id:"s"+Date.now(),pos:maxPos+1,area:"",project:"",desc:"",po:"",shopModel:"",shopDetail:"",ifaIssued:"",ifaComments:"",ifcIssued:"",manual:"",modelUrl:""};
   state.push(nr);saveRow(nr);render();
   const sc=document.querySelector(".table-scroll");sc.scrollTop=sc.scrollHeight;
 });
@@ -824,11 +846,11 @@ document.getElementById("exCsv").addEventListener("click",()=>{
       "IFA Package Issued":r.ifaIssued||"", "IFA Return Comments":r.ifaComments||"",
       "IFC Package Issued":r.ifcIssued||"",
       "Status":code, "Status (full)":(SMAP[code]||{}).label||"",
-      "Status Source":r.manual?"Manual":"Workflow", "PO":r.po
+      "Status Source":r.manual?"Manual":"Workflow", "PO":r.po, "Model Link":r.modelUrl||""
     };
   });
   const ws=XLSX.utils.json_to_sheet(rows);
-  ws["!cols"]=[{wch:5},{wch:11},{wch:50},{wch:56},{wch:12},{wch:14},{wch:16},{wch:17},{wch:16},{wch:8},{wch:24},{wch:13},{wch:13}];
+  ws["!cols"]=[{wch:5},{wch:11},{wch:50},{wch:56},{wch:12},{wch:14},{wch:16},{wch:17},{wch:16},{wch:8},{wch:24},{wch:13},{wch:13},{wch:46}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,"South32 Register");
   XLSX.writeFile(wb,"South32_Tracking_Register_"+tstamp()+".xlsx");

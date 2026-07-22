@@ -73,8 +73,8 @@ select.filter{height:36px;border:1px solid var(--line);border-radius:6px;backgro
 
 .table-wrap{max-width:1500px;margin:14px auto 40px;padding:0 22px}
 .table-scroll{background:var(--paper);border:1px solid var(--line);border-radius:6px;box-shadow:var(--shadow);overflow:auto;max-height:calc(100vh - 300px);min-height:300px}
-table{border-collapse:separate;border-spacing:0;width:100%;min-width:1096px}
-table.ms-collapsed{min-width:666px}
+table{border-collapse:separate;border-spacing:0;width:100%;min-width:1276px}
+table.ms-collapsed{min-width:846px}
 thead{position:sticky;top:0;z-index:3}
 thead th{background:var(--brand);color:#dfe7ef;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;
   text-align:left;padding:10px 10px;white-space:nowrap;border-bottom:2px solid var(--accent);vertical-align:bottom}
@@ -87,6 +87,10 @@ td.client{font-weight:700;color:var(--ink-2);text-transform:uppercase;font-size:
 td.project{font-weight:700;color:var(--navy);width:calc(61.75ch + 18px);min-width:calc(61.75ch + 18px);max-width:calc(61.75ch + 18px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 td.desc{width:calc(58.5ch + 18px);min-width:calc(58.5ch + 18px);max-width:calc(58.5ch + 18px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 td.po{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);width:130px;min-width:130px;white-space:nowrap}
+td.model{width:180px;min-width:180px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+td.model a{color:var(--navy);font-size:11.5px;text-decoration:underline;text-decoration-color:rgba(31,56,100,.35)}
+td.model a:hover{text-decoration-color:var(--navy)}
+td.model .none{color:var(--ink-3)}
 td.status{width:110px}
 .pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;padding:4px 12px;border-radius:20px;white-space:nowrap;letter-spacing:.4px}
 .pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.85}
@@ -182,7 +186,7 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3)}
   <div class="table-scroll">
     <table id="viewTable">
       <thead>
-        <tr><th>#</th><th>Area</th><th>Project</th><th>Description</th><th class="ms pct">Shop Model</th><th class="ms pct">Shop Detailing</th><th class="ms">IFA Package Issued</th><th class="ms">IFA Return Comments</th><th class="ms">IFC Package Issued</th><th>Status</th><th>PO</th></tr>
+        <tr><th>#</th><th>Area</th><th>Project</th><th>Description</th><th class="ms pct">Shop Model</th><th class="ms pct">Shop Detailing</th><th class="ms">IFA Package Issued</th><th class="ms">IFA Return Comments</th><th class="ms">IFC Package Issued</th><th>Status</th><th>PO</th><th>Model Link</th></tr>
       </thead>
       <tbody id="tbody"></tbody>
     </table>
@@ -217,7 +221,7 @@ const MILESTONES=[{f:"ifaIssued"},{f:"ifaComments"},{f:"ifcIssued"}];
 const MSFIELDS=MILESTONES.map(m=>m.f);
 function derivedStatus(r){ if(r.ifcIssued) return "IFC"; if(r.ifaComments||r.ifaIssued) return "IFA"; if(pctVal(r.shopModel)>0||pctVal(r.shopDetail)>0) return "WIP"; return "PEND"; }
 function effectiveStatus(r){ return (r.manual && SMAP[r.manual]) ? r.manual : derivedStatus(r); }
-function normalize(r){ if(r.area==null){ const pj=r.project||""; r.area=/pastefill|paste plant|paste pump/i.test(pj)?"PF":/secondary grinding/i.test(pj)?"SG":/filter/i.test(pj)?"FIL":/float|flotation/i.test(pj)?"FLO":""; } MSFIELDS.forEach(k=>{ if(r[k]==null) r[k]=""; }); ["shopModel","shopDetail"].forEach(k=>{ if(r[k]==null) r[k]=""; }); if(r.manual==null){ r.manual=(r.status&&SMAP[r.status])?r.status:""; } return r; }
+function normalize(r){ if(r.area==null){ const pj=r.project||""; r.area=/pastefill|paste plant|paste pump/i.test(pj)?"PF":/secondary grinding/i.test(pj)?"SG":/filter/i.test(pj)?"FIL":/float|flotation/i.test(pj)?"FLO":""; } MSFIELDS.forEach(k=>{ if(r[k]==null) r[k]=""; }); ["shopModel","shopDetail"].forEach(k=>{ if(r[k]==null) r[k]=""; }); if(r.modelUrl==null) r.modelUrl=""; if(r.manual==null){ r.manual=(r.status&&SMAP[r.status])?r.status:""; } return r; }
 function fmtD(d){ if(!d) return "—"; const p=String(d).split("-"); return p.length===3?p[2]+"/"+p[1]+"/"+p[0].slice(2):"—"; }
 function pctVal(v){ v=parseInt(v,10); return isNaN(v)?0:Math.max(0,Math.min(100,v)); }
 
@@ -247,6 +251,7 @@ const GKEY="dm_south32_vgroups_v1";
 let collapsedGroups=new Set();
 try{ const g=JSON.parse(localStorage.getItem(GKEY)); if(Array.isArray(g)) collapsedGroups=new Set(g); }catch(e){}
 function saveGroups(){ try{ localStorage.setItem(GKEY, JSON.stringify([...collapsedGroups])); }catch(e){} }
+function modelHref(u){ u=(u||"").trim(); if(!u) return ""; return /^https?:\/\//i.test(u)?u:"https://"+u; }
 function rowHTML(r,idx){
   const code=effectiveStatus(r); const s=SMAP[code]||STATUS[0];
   const dc=f=>'<td class="ms'+(r[f]?' done':'')+'">'+fmtD(r[f])+'</td>';
@@ -261,11 +266,12 @@ function rowHTML(r,idx){
     +dc('ifaIssued')+dc('ifaComments')+dc('ifcIssued')
     +'<td class="status"><span class="pill '+s.cls+'" title="'+esc(s.label)+(r.manual?' — manual override':' — from workflow')+'">'+esc(code)+'</span></td>'
     +'<td class="po">'+esc(r.po)+'</td>'
+    +'<td class="model">'+(r.modelUrl?'<a href="'+esc(modelHref(r.modelUrl))+'" target="_blank" rel="noopener" title="'+esc(r.modelUrl)+'">'+esc(r.modelUrl)+'</a>':'<span class="none">—</span>')+'</td>'
     +'</tr>';
 }
 function render(){
   const rows=state.slice().sort((a,b)=>(a.pos||0)-(b.pos||0)).filter(passFilter);
-  if(!rows.length){ tbody.innerHTML='<tr class="empty"><td colspan="11">No projects match your filters.</td></tr>'; return dashboard(); }
+  if(!rows.length){ tbody.innerHTML='<tr class="empty"><td colspan="12">No projects match your filters.</td></tr>'; return dashboard(); }
   const order=[...AREAS.map(a=>a.code),""];
   const buckets={}; order.forEach(c=>buckets[c]=[]);
   rows.forEach(r=>{ const c=(r.area&&AMAP[r.area])?r.area:""; buckets[c].push(r); });
@@ -274,7 +280,7 @@ function render(){
     const list=buckets[code]; if(!list.length) return;
     const a=AMAP[code]; const gkey=code||"__none"; const collapsed=collapsedGroups.has(gkey);
     const color=a?(AREA_COLOR[a.cls]||"#8a8a8a"):"#b6b6b6";
-    html+='<tr class="grouphdr'+(collapsed?' collapsed':'')+'" data-group="'+gkey+'"><td colspan="11"><div class="ghinner">'
+    html+='<tr class="grouphdr'+(collapsed?' collapsed':'')+'" data-group="'+gkey+'"><td colspan="12"><div class="ghinner">'
       +'<svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
       +'<span class="gdot" style="background:'+color+'"></span>'
       +'<span class="gname">'+(a?esc(a.label):"Unassigned")+'</span>'
@@ -346,10 +352,10 @@ document.getElementById("exCsv").addEventListener("click",()=>{
       "Shop Model %":r.shopModel||"","Shop Detailing %":r.shopDetail||"",
       "IFA Package Issued":r.ifaIssued||"","IFA Return Comments":r.ifaComments||"",
       "IFC Package Issued":r.ifcIssued||"",
-      "Status":code,"Status (full)":(SMAP[code]||{}).label||"","PO":r.po};
+      "Status":code,"Status (full)":(SMAP[code]||{}).label||"","PO":r.po,"Model Link":r.modelUrl||""};
   });
   const ws=XLSX.utils.json_to_sheet(rows);
-  ws["!cols"]=[{wch:5},{wch:11},{wch:50},{wch:56},{wch:12},{wch:14},{wch:16},{wch:17},{wch:16},{wch:8},{wch:24},{wch:13}];
+  ws["!cols"]=[{wch:5},{wch:11},{wch:50},{wch:56},{wch:12},{wch:14},{wch:16},{wch:17},{wch:16},{wch:8},{wch:24},{wch:13},{wch:46}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,"South32 Register");
   XLSX.writeFile(wb,"South32_Tracking_Register_"+tstamp()+".xlsx");
