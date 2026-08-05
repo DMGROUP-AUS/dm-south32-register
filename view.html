@@ -209,13 +209,17 @@ const STATUS=[
   {code:"HOLD",cls:"hold",label:"On Hold"},
 ];
 const SMAP=Object.fromEntries(STATUS.map(s=>[s.code,s]));
-const AREAS = [
-  {code:"PF",  cls:"pf",  label:"Pastefill"},
-  {code:"SG",  cls:"sg",  label:"Secondary Grinding"},
-  {code:"FIL", cls:"fil", label:"Filters"},
-  {code:"FLO", cls:"flo", label:"Floats"},
+let AREAS = [
+  {code:"PF",  label:"Pastefill"},
+  {code:"SG",  label:"Secondary Grinding"},
+  {code:"FIL", label:"Filters"},
+  {code:"FLO", label:"Floats"},
 ];
-const AMAP = Object.fromEntries(AREAS.map(a=>[a.code,a]));
+let AMAP = {};
+function rebuildAMAP(){ AMAP = Object.fromEntries(AREAS.map(a=>[a.code,a])); }
+rebuildAMAP();
+function applyAreas(list){ if(Array.isArray(list)&&list.length){ AREAS=list.filter(a=>a&&a.code).map(a=>({code:String(a.code).toUpperCase().trim(),label:(a.label||String(a.code)).trim()})); } rebuildAMAP(); }
+const AREAS_ID="__areas__";
 const SWEIGHT={PEND:0,WIP:35,P1:60,IFA:80,HOLD:50,IFC:100};
 const MILESTONES=[{f:"ifaIssued"},{f:"ifaComments"},{f:"ifcIssued"}];
 const MSFIELDS=MILESTONES.map(m=>m.f);
@@ -255,7 +259,7 @@ function modelHref(u){ u=(u||"").trim(); if(!u) return ""; return /^https?:\/\//
 function rowHTML(r,idx){
   const code=effectiveStatus(r); const s=SMAP[code]||STATUS[0];
   const dc=f=>'<td class="ms'+(r[f]?' done':'')+'">'+fmtD(r[f])+'</td>';
-  const a=AMAP[r.area]; const areaTag='<span class="areatag'+(a?' area-'+a.cls:' empty')+'" title="'+(a?esc(a.label):'')+'">'+(a?esc(a.code):'—')+'</span>';
+  const a=AMAP[r.area]; const areaTag='<span class="areatag'+(a?'':' empty')+'" title="'+(a?esc(a.label):'')+'">'+(a?esc(a.code):'—')+'</span>';
   const pc=f=>{const v=(r[f]==null||r[f]==="")?"":r[f];return '<td class="ms pct'+(v!==""?' has':'')+'">'+(v!==""?esc(v)+'%':'—')+'<i class="pctbar" style="width:'+pctVal(v)+'%"></i></td>';};
   return '<tr>'
     +'<td class="idx">'+idx+'</td>'
@@ -279,7 +283,7 @@ function render(){
   order.forEach(code=>{
     const list=buckets[code]; if(!list.length) return;
     const a=AMAP[code]; const gkey=code||"__none"; const collapsed=collapsedGroups.has(gkey);
-    const color=a?(AREA_COLOR[a.cls]||"#8a8a8a"):"#b6b6b6";
+    const color=a?"#8a8a8a":"#b6b6b6";
     html+='<tr class="grouphdr'+(collapsed?' collapsed':'')+'" data-group="'+gkey+'"><td colspan="12"><div class="ghinner">'
       +'<svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
       +'<span class="gdot" style="background:'+color+'"></span>'
@@ -378,7 +382,9 @@ async function load(){
   if(!sb){ render(); return; }
   const {data,error}=await sb.from(TABLE).select("*").order("pos",{ascending:true});
   if(error){ render(); return; }
-  state=data.filter(r=>r.id!==META_ID).map(r=>normalize({...r.data,id:r.id,pos:r.pos}));
+  const areasRow=data.find(r=>r.id===AREAS_ID);
+  if(areasRow) applyAreas(areasRow.data && areasRow.data.list);
+  state=data.filter(r=>r.id!==META_ID && r.id!==AREAS_ID).map(r=>normalize({...r.data,id:r.id,pos:r.pos}));
   const metaRow=data.find(r=>r.id===META_ID);
   if(metaRow) applyMeta(metaRow.data||{});
   document.getElementById("lastUpdated").textContent="Updated "+new Date().toLocaleString("en-AU",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
@@ -391,6 +397,7 @@ if(sb){
     .on("postgres_changes",{event:"*",schema:"public",table:TABLE},payload=>{
       const row=payload.new||payload.old; if(!row) return;
       if(row.id===META_ID){ if(payload.new) applyMeta(payload.new.data); return; }
+      if(row.id===AREAS_ID){ if(payload.new){ applyAreas(payload.new.data && payload.new.data.list); render(); } return; }
       if(payload.eventType==="DELETE") state=state.filter(x=>x.id!==row.id);
       else{
         const rec=normalize({...payload.new.data,id:row.id,pos:payload.new.pos});

@@ -266,6 +266,22 @@ tr.grouphdr td{padding:0;background:#ededed;border-top:1px solid var(--line);bor
 .grouphdr .gname{font-size:11.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--ink)}
 .grouphdr .gcount{font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--ink-3)}
 .grouphdr:hover .gname{color:#000}
+.modal-bg{position:fixed;inset:0;background:rgba(35,32,31,.55);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
+.modal-bg.show{display:flex}
+.modal{background:#fff;border-radius:8px;width:100%;max-width:470px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.28);display:flex;flex-direction:column;max-height:85vh}
+.modal-header{background:var(--brand);color:#fff;padding:13px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid var(--accent)}
+.modal-header h3{font-size:14px;font-weight:700;margin:0}
+.modal-close{background:transparent;border:none;color:#fff;font-size:22px;line-height:1;cursor:pointer;padding:0}
+.modal-body{padding:16px 18px;overflow:auto}
+.modal-body .hint{font-size:11.5px;color:var(--ink-3);margin:0 0 12px;line-height:1.4}
+.arearow{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.arearow input{border:1px solid var(--line);border-radius:5px;padding:7px 9px;font-family:inherit;font-size:12.5px;color:var(--ink);outline:none}
+.arearow input:focus{border-color:var(--accent-dark);box-shadow:0 0 0 3px rgba(253,211,0,.18)}
+.arearow .acode{width:78px;text-transform:uppercase;font-weight:700;text-align:center;letter-spacing:.5px}
+.arearow .aname{flex:1;min-width:0}
+.arearow .adel{width:28px;height:28px;flex:none;border:1px solid var(--line);border-radius:5px;background:#f5f5f5;color:var(--ink-3);cursor:pointer;font-size:15px;line-height:1}
+.arearow .adel:hover{background:#fdecea;color:#c0392b;border-color:#f5c0b8}
+.modal-actions{padding:12px 18px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--line-soft)}
 tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
 
 /* ---------- Legend / footer ---------- */
@@ -339,6 +355,7 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
     <input id="q" placeholder="Search project, description or PO…">
   </div>
   <button class="btn" id="msToggle"><i class="ti ti-arrows-diagonal-minimize-2"></i>Collapse workflow</button>
+  <button class="btn" id="areaBtn"><i class="ti ti-tag"></i>Areas</button>
   <button class="btn" id="addRow"><i class="ti ti-plus"></i>Add project</button>
   <button class="btn" id="exCsv"><i class="ti ti-file-spreadsheet"></i>Excel</button>
   <button class="btn primary" id="pdfBtn"><i class="ti ti-file-type-pdf"></i>Client PDF</button>
@@ -397,6 +414,18 @@ tr.empty td{padding:40px;text-align:center;color:var(--ink-3);font-size:13px}
 
 <div id="toast" class="toast"></div>
 
+<div class="modal-bg" id="areaModal">
+  <div class="modal">
+    <div class="modal-header"><h3>Manage Areas</h3><button class="modal-close" id="areaClose">&times;</button></div>
+    <div class="modal-body">
+      <p class="hint">The <b>code</b> is the short tag shown in the Area column and used for grouping; the <b>name</b> is the group heading. Renaming a code moves its jobs to the new code. Deleting an area sets its jobs to Unassigned.</p>
+      <div id="areaList"></div>
+      <button class="btn" id="areaAdd" style="margin-top:4px"><i class="ti ti-plus"></i>Add area</button>
+    </div>
+    <div class="modal-actions"><button class="btn" id="areaCancel">Cancel</button><button class="btn primary" id="areaSave">Save areas</button></div>
+  </div>
+</div>
+
 <script>
 /* ============================================================
    STATUS DEFINITIONS
@@ -411,13 +440,18 @@ const STATUS = [
 ];
 const SMAP = Object.fromEntries(STATUS.map(s=>[s.code,s]));
 /* progress weight per status — drives the overall completion bar */
-const AREAS = [
-  {code:"PF",  cls:"pf",  label:"Pastefill"},
-  {code:"SG",  cls:"sg",  label:"Secondary Grinding"},
-  {code:"FIL", cls:"fil", label:"Filters"},
-  {code:"FLO", cls:"flo", label:"Floats"},
+const DEFAULT_AREAS = [
+  {code:"PF",  label:"Pastefill"},
+  {code:"SG",  label:"Secondary Grinding"},
+  {code:"FIL", label:"Filters"},
+  {code:"FLO", label:"Floats"},
 ];
-const AMAP = Object.fromEntries(AREAS.map(a=>[a.code,a]));
+let AREAS = DEFAULT_AREAS.slice();
+let AMAP = {};
+function rebuildAMAP(){ AMAP = Object.fromEntries(AREAS.map(a=>[a.code,a])); }
+rebuildAMAP();
+function applyAreas(list){ if(Array.isArray(list)&&list.length){ AREAS=list.filter(a=>a&&a.code).map(a=>({code:String(a.code).toUpperCase().trim(),label:(a.label||String(a.code)).trim()})); } rebuildAMAP(); }
+const AREAS_ID="__areas__";
 const SWEIGHT = {PEND:0, WIP:35, P1:60, IFA:80, HOLD:50, IFC:100};
 
 /* Deliverable workflow milestones (in order) */
@@ -535,6 +569,7 @@ let state = (saved && saved.rows) ? saved.rows : seed();
 let meta  = (saved && saved.meta) ? saved.meta : {};
 state.forEach((r,i)=>{ if(r.pos==null) r.pos=i; });
 state.forEach(normalize);
+if(saved && Array.isArray(saved.areas)) applyAreas(saved.areas);
 
 /* ============================================================
    SAVE  ——  routes to Supabase (cloud) or localStorage (local)
@@ -549,7 +584,8 @@ function setSync(kind){
   else if(kind==="err"){dot.classList.add("err");t.textContent="Offline — saved locally";}
   else{t.textContent=cloud()?"Synced with team":"Saved in this browser";}
 }
-function persistLocal(){ store.save({rows:state, meta:collectMeta(), ts:Date.now()}); }
+function persistLocal(){ store.save({rows:state, meta:collectMeta(), areas:AREAS, ts:Date.now()}); }
+async function saveAreas(){ persistLocal(); if(!cloud()){ return; } selfWrites.add(AREAS_ID); const {error}=await sb.from(TABLE).upsert({id:AREAS_ID,pos:-2,data:{list:AREAS,_v:1},updated_at:new Date().toISOString()},{onConflict:"id"}); setSync(error?"err":"ok"); }
 function toRow(r){ return {id:r.id, pos:(r.pos==null?0:r.pos), data:r, updated_at:new Date().toISOString()}; }
 
 const selfWrites=new Set();
@@ -619,7 +655,7 @@ function areaCell(r){
   const td=document.createElement("td");td.className="client area";
   const cell=document.createElement("div");cell.className="cell";
   const code=r.area||""; const a=AMAP[code];
-  const tag=document.createElement("span");tag.className="areatag"+(a?" area-"+a.cls:" empty");tag.textContent=a?a.code:"—";tag.title=a?a.label:"Set area";
+  const tag=document.createElement("span");tag.className="areatag"+(a?"":" empty");tag.textContent=a?a.code:"—";tag.title=a?a.label:"Set area";
   const sel=document.createElement("select");sel.className="area-sel";sel.dataset.f="area";
   const blank=document.createElement("option");blank.value="";blank.textContent="— unset";if(!code)blank.selected=true;sel.appendChild(blank);
   AREAS.forEach(o=>{const op=document.createElement("option");op.value=o.code;op.textContent=o.code+" — "+o.label;if(o.code===code)op.selected=true;sel.appendChild(op);});
@@ -715,7 +751,7 @@ try{ const g=JSON.parse(localStorage.getItem(GKEY)); if(Array.isArray(g)) collap
 function saveGroups(){ try{ localStorage.setItem(GKEY, JSON.stringify([...collapsedGroups])); }catch(e){} }
 function groupHeaderRow(code,count){
   const a=AMAP[code]; const gkey=code||"__none"; const collapsed=collapsedGroups.has(gkey);
-  const color=a?(AREA_COLOR[a.cls]||"#8a8a8a"):"#b6b6b6";
+  const color=a?"#8a8a8a":"#b6b6b6";
   const tr=document.createElement("tr");tr.className="grouphdr"+(collapsed?" collapsed":"");tr.dataset.group=gkey;
   const td=document.createElement("td");td.colSpan=14;
   td.innerHTML='<div class="ghinner"><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
@@ -802,7 +838,7 @@ tbody.addEventListener("input",e=>{
   const tr=e.target.closest("tr"); const r=getRow(tr.dataset.id); if(!r) return;
   r[f]=e.target.value; queueRowSave(r);
   if(f==="modelUrl"){ const a=tr.querySelector("td.model .open"); if(a){ a.href=modelHref(r.modelUrl); a.classList.toggle("off",!r.modelUrl); } e.target.title=r.modelUrl||"Paste the model web-viewer URL"; }
-  if(f==="area"){ const tag=tr.querySelector(".areatag"); const a=AMAP[r.area]; if(tag){ tag.className="areatag"+(a?" area-"+a.cls:" empty"); tag.textContent=a?a.code:"—"; tag.title=a?a.label:"Set area"; } }
+  if(f==="area"){ const tag=tr.querySelector(".areatag"); const a=AMAP[r.area]; if(tag){ tag.className="areatag"+(a?"":" empty"); tag.textContent=a?a.code:"—"; tag.title=a?a.label:"Set area"; } }
   if(e.target.tagName==="TEXTAREA") autoGrow(e.target);
   if(e.target.dataset.pct){ const td=e.target.closest("td"), bar=td&&td.querySelector(".pctbar"); if(bar) bar.style.width=pctVal(r[f])+"%"; }
   if(MSFIELDS.includes(f)){
@@ -1027,9 +1063,14 @@ async function cloudLoad(){
     await saveAll();
     selfWrites.add(META_ID);
     await sb.from(TABLE).upsert({id:META_ID,pos:-1,data:{...collectMeta(),_v:META_V},updated_at:new Date().toISOString()},{onConflict:"id"});
+    selfWrites.add(AREAS_ID);
+    await sb.from(TABLE).upsert({id:AREAS_ID,pos:-2,data:{list:AREAS,_v:1},updated_at:new Date().toISOString()},{onConflict:"id"});
     setSync("ok"); return;
   }
-  state = data.filter(r=>r.id!==META_ID).map(r=>normalize({...r.data, id:r.id, pos:r.pos}));
+  const areasRow=data.find(r=>r.id===AREAS_ID);
+  if(areasRow) applyAreas(areasRow.data && areasRow.data.list);
+  else { selfWrites.add(AREAS_ID); await sb.from(TABLE).upsert({id:AREAS_ID,pos:-2,data:{list:AREAS,_v:1},updated_at:new Date().toISOString()},{onConflict:"id"}); }
+  state = data.filter(r=>r.id!==META_ID && r.id!==AREAS_ID).map(r=>normalize({...r.data, id:r.id, pos:r.pos}));
   const metaRow=data.find(r=>r.id===META_ID);
   persistLocal();
   if(metaRow) applyMeta(metaRow.data||{});
@@ -1046,6 +1087,7 @@ function onRemote(payload){
   const id=row.id;
   if(selfWrites.has(id)){ selfWrites.delete(id); return; }
   if(id===META_ID){ if(payload.new) applyMeta(payload.new.data); return; }
+  if(id===AREAS_ID){ if(payload.new){ applyAreas(payload.new.data && payload.new.data.list); render(); } return; }
   if(payload.eventType==="DELETE"){
     state=state.filter(x=>x.id!==id);
   }else{
@@ -1057,6 +1099,46 @@ function onRemote(payload){
   persistLocal();
   pendingRemote=true; reconcile();
 }
+
+/* ---- Manage Areas ---- */
+const areaModal=document.getElementById("areaModal");
+function areaRowEl(code,name){
+  const d=document.createElement("div");d.className="arearow";d.dataset.orig=code||"";
+  d.innerHTML='<input class="acode" maxlength="6" placeholder="CODE" value="'+(code||"").replace(/"/g,"&quot;")+'"><input class="aname" placeholder="Full area name" value="'+(name||"").replace(/"/g,"&quot;")+'"><button class="adel" title="Remove">\u00d7</button>';
+  d.querySelector(".adel").addEventListener("click",()=>d.remove());
+  return d;
+}
+function openAreaModal(){ const l=document.getElementById("areaList");l.innerHTML="";AREAS.forEach(a=>l.appendChild(areaRowEl(a.code,a.label)));areaModal.classList.add("show"); }
+function closeAreaModal(){ areaModal.classList.remove("show"); }
+document.getElementById("areaBtn").addEventListener("click",openAreaModal);
+document.getElementById("areaClose").addEventListener("click",closeAreaModal);
+document.getElementById("areaCancel").addEventListener("click",closeAreaModal);
+areaModal.addEventListener("click",e=>{ if(e.target===areaModal) closeAreaModal(); });
+document.getElementById("areaAdd").addEventListener("click",()=>{ document.getElementById("areaList").appendChild(areaRowEl("","")); document.querySelector("#areaList .arearow:last-child .acode").focus(); });
+document.getElementById("areaSave").addEventListener("click",()=>{
+  const oldCodes=new Set(AREAS.map(a=>a.code));
+  const els=[...document.querySelectorAll("#areaList .arearow")];
+  const newList=[], seen=new Set(), renameMap={}, keptOrig=new Set();
+  for(const el of els){
+    const code=el.querySelector(".acode").value.trim().toUpperCase();
+    const name=el.querySelector(".aname").value.trim();
+    const orig=el.dataset.orig||"";
+    if(!code) continue;
+    if(!/^[A-Z0-9]{1,6}$/.test(code)){ alert("Area code must be 1-6 letters or numbers: "+code); return; }
+    if(seen.has(code)){ alert("Duplicate area code: "+code); return; }
+    seen.add(code); newList.push({code,label:name||code});
+    if(orig){ renameMap[orig]=code; keptOrig.add(orig); }
+  }
+  if(!newList.length){ alert("Keep at least one area."); return; }
+  const removed=[...oldCodes].filter(c=>!keptOrig.has(c));
+  const changed=[];
+  state.forEach(r=>{
+    if(r.area && renameMap[r.area] && renameMap[r.area]!==r.area){ r.area=renameMap[r.area]; changed.push(r); }
+    else if(r.area && removed.includes(r.area)){ r.area=""; changed.push(r); }
+  });
+  AREAS=newList; rebuildAMAP(); saveAreas(); changed.forEach(r=>saveRow(r));
+  closeAreaModal(); render(); toast("Areas updated");
+});
 
 if(cloud()){
   cloudLoad();
