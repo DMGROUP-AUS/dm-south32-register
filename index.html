@@ -169,6 +169,40 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:15px;color:var(--dm-black)
 .field .hint{font-size:11px;color:#999;margin-top:2px}
 .modal-actions{padding:12px 20px 20px;display:flex;gap:8px;justify-content:flex-end}
 
+
+/* ===================== Import jobs tool ===================== */
+.imp{margin-top:28px;background:#fff;border:1px solid var(--dm-border);border-radius:8px;box-shadow:0 1px 2px rgba(35,32,31,.05);overflow:hidden}
+.imp-head{background:var(--dm-black);color:#fff;padding:11px 16px;display:flex;align-items:center;gap:10px;border-bottom:3px solid var(--dm-yellow)}
+.imp-head h2{font-size:14px;font-weight:700;margin:0;flex:1}
+.imp-head .sub{font-size:11px;color:rgba(255,255,255,.55)}
+.imp-body{padding:16px}
+.imp-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:760px){.imp-row{grid-template-columns:1fr}}
+.drop{border:2px dashed var(--dm-border);border-radius:8px;padding:22px 16px;text-align:center;color:var(--dm-charcoal);cursor:pointer;transition:.12s;min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#fafafa}
+.drop:hover,.drop.over{border-color:var(--dm-yellow-dark);background:#fffbe6}
+.drop b{color:var(--dm-black)}
+.drop small{font-size:11px;color:#999}
+.drop img{max-width:100%;max-height:170px;border-radius:5px;border:1px solid var(--dm-border)}
+.imp textarea{width:100%;min-height:150px;border:1px solid var(--dm-border);border-radius:8px;padding:10px 12px;font-family:"SFMono-Regular",Consolas,monospace;font-size:12px;color:var(--dm-black);resize:vertical;outline:none}
+.imp textarea:focus{border-color:var(--dm-yellow-dark);box-shadow:0 0 0 3px rgba(253,211,0,.18)}
+.imp-actions{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.imp-status{font-size:12px;color:var(--dm-charcoal);flex:1}
+.imp-status.err{color:var(--dm-red);font-weight:700}
+.imp table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}
+.imp th{background:var(--dm-black);color:#dfe7ef;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;text-align:left;padding:8px 9px;border-bottom:2px solid var(--dm-yellow)}
+.imp td{padding:6px 9px;border-bottom:1px solid #eee;vertical-align:middle}
+.imp td input.f,.imp td select.f{width:100%;border:1px solid var(--dm-border);border-radius:4px;padding:5px 7px;font-family:inherit;font-size:12.5px;color:var(--dm-black)}
+.imp td input.f:focus,.imp td select.f:focus{outline:none;border-color:var(--dm-yellow-dark)}
+.imp td.code input.f{font-family:"SFMono-Regular",Consolas,monospace;font-weight:700}
+.imp tr.exists td{background:#f6f6f6;color:#999}
+.imp tr.exists td input.f{color:#999}
+.tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.5px;padding:3px 8px;border-radius:10px}
+.tag.new{background:#E2EFDA;color:#375623}
+.tag.have{background:#eaeaea;color:#777}
+.imp-foot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:10px;flex-wrap:wrap}
+.imp-foot .cnt{font-size:12px;color:var(--dm-charcoal)}
+.spin{width:14px;height:14px;border:2px solid #ccc;border-top-color:var(--dm-black);border-radius:50%;animation:sp .8s linear infinite;display:inline-block;vertical-align:-3px;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
 .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--dm-black);color:#fff;padding:11px 20px;border-radius:6px;font-size:13px;font-weight:600;border-left:4px solid var(--dm-yellow);box-shadow:0 8px 30px rgba(35,32,31,.25);opacity:0;pointer-events:none;transition:.25s;z-index:200}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
@@ -208,6 +242,30 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:15px;color:var(--dm-black)
   </div>
 
   <div id="list" class="list"></div>
+
+  <section class="imp" id="imp">
+    <div class="imp-head">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+      <h2>Import jobs from master list</h2>
+      <span class="sub">Finds job numbers &middot; adds what's missing to the register</span>
+    </div>
+    <div class="imp-body">
+      <div class="imp-row">
+        <div class="drop" id="drop" tabindex="0">
+          <div><b>Drop a screenshot here</b> or click to choose</div>
+          <small>You can also just press Ctrl+V / Cmd+V anywhere on this page to paste one</small>
+          <input type="file" id="dropFile" accept="image/*" style="display:none">
+        </div>
+        <textarea id="impText" placeholder="…or paste the copied list as text here (job number + name per line)"></textarea>
+      </div>
+      <div class="imp-actions">
+        <button class="btn primary" id="impRead">Read &amp; compare</button>
+        <button class="btn" id="impClear">Clear</button>
+        <span class="imp-status" id="impStatus">Paste or drop a screenshot, or paste text, then click <b>Read &amp; compare</b>.</span>
+      </div>
+      <div id="impResults"></div>
+    </div>
+  </section>
 
 </div>
 
@@ -384,6 +442,169 @@ sb.channel("south32-jobs")
   .subscribe();
 
 load();
+
+/* ============================================================
+   IMPORT JOBS — screenshot (OCR) or pasted text -> missing jobs
+   ============================================================ */
+const ITEMS_TABLE="south32_items";
+const JOB_RE=/\b(\d{2}-\d{4}(?:-[A-Z]?\d{2,3})?)\b/g;      // 09-2452, 09-2279-019, 09-2414-V01
+const PO_RE=/\b(45\d{8})\b/;                                 // 10-digit PO starting 45…
+const NOISE_RE=/^(fixed|t\s*&\s*m|t&m|south\s*32|sun metals.*|\d+|[-–—•·]+)$/i;
+let impDetected=[]; let impImageBlob=null;
+
+function areaFor(name){
+  const n=name||"";
+  if(/pastefill|paste plant|paste pump/i.test(n)) return "PF";
+  if(/secondary grinding/i.test(n)) return "SG";
+  if(/filter/i.test(n)) return "FIL";
+  if(/float|flotation/i.test(n)) return "FLO";
+  return "";
+}
+function cleanName(t){
+  let x=(t||"").replace(/\b(FIXED|T\s*&\s*M|T&M)\b/g," ").replace(PO_RE," ").replace(/[|_]+/g," ");
+  x=x.replace(/(\s+[–—-]\s*)?(\s+\d{1,3})?\s*$/,"");          // drop trailing "— 5" / "16" count columns
+  return x.replace(/\s{2,}/g," ").replace(/^[\s\-–—:.]+|[\s\-–—:.]+$/g,"").trim();
+}
+function parseJobs(text){
+  const lines=String(text||"").split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const out=[]; let last=null;
+  for(const line of lines){
+    JOB_RE.lastIndex=0; const m=JOB_RE.exec(line);
+    if(m){
+      const code=m[1].toUpperCase();
+      const rest=line.slice(m.index+m[0].length);
+      const po=(rest.match(PO_RE)||[])[1]||"";
+      const name=cleanName(rest);
+      last={code,name,po}; out.push(last);
+    }else if(last && !NOISE_RE.test(line) && /[A-Za-z]{3,}/.test(line) && !PO_RE.test(line)){
+      const extra=cleanName(line); if(extra) last.name=(last.name+" "+extra).trim();   // wrapped name continuation
+    }
+  }
+  // de-dupe by code
+  const seen=new Set(); return out.filter(j=>{ if(seen.has(j.code)) return false; seen.add(j.code); return true; });
+}
+
+function setImpStatus(msg,err){ const el=document.getElementById("impStatus"); el.innerHTML=msg; el.classList.toggle("err",!!err); }
+
+/* lazy-load OCR engine only when a screenshot is used */
+let tessReady=null;
+function loadTesseract(){
+  if(window.Tesseract) return Promise.resolve();
+  if(tessReady) return tessReady;
+  tessReady=new Promise((res,rej)=>{
+    const sc=document.createElement("script");
+    sc.src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    sc.onload=res; sc.onerror=()=>rej(new Error("Could not load the OCR engine (check internet)."));
+    document.head.appendChild(sc);
+  });
+  return tessReady;
+}
+async function ocrImage(blob){
+  await loadTesseract();
+  const res=await Tesseract.recognize(blob,"eng",{logger:m=>{ if(m.status==="recognizing text") setImpStatus('<span class="spin"></span>Reading screenshot… '+Math.round((m.progress||0)*100)+'%'); }});
+  return res.data.text||"";
+}
+
+/* image intake: drop / click / paste */
+const drop=document.getElementById("drop"), dropFile=document.getElementById("dropFile");
+function showImage(blob){
+  impImageBlob=blob;
+  const url=URL.createObjectURL(blob);
+  drop.innerHTML='<img src="'+url+'" alt="screenshot"><small>Screenshot ready — click <b>Read &amp; compare</b></small>';
+  setImpStatus("Screenshot loaded.");
+}
+drop.addEventListener("click",()=>dropFile.click());
+drop.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" ") dropFile.click(); });
+dropFile.addEventListener("change",()=>{ if(dropFile.files[0]) showImage(dropFile.files[0]); });
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop",e=>{ const f=[...(e.dataTransfer.files||[])].find(x=>x.type.startsWith("image/")); if(f) showImage(f); });
+document.addEventListener("paste",e=>{
+  if(document.activeElement===document.getElementById("impText")) return;      // let text paste into the box normally
+  const items=[...(e.clipboardData?.items||[])];
+  const img=items.find(i=>i.type.startsWith("image/"));
+  if(img){ e.preventDefault(); showImage(img.getAsFile()); }
+});
+
+/* compare with the register + render review */
+async function loadRegister(){
+  const {data,error}=await sb.from(ITEMS_TABLE).select("*");
+  if(error) throw new Error("Could not read the register: "+error.message);
+  const areasRow=data.find(r=>r.id==="__areas__");
+  const areas=(areasRow&&areasRow.data&&Array.isArray(areasRow.data.list))?areasRow.data.list:[{code:"PF",label:"Pastefill"},{code:"SG",label:"Secondary Grinding"},{code:"FIL",label:"Filters"},{code:"FLO",label:"Floats"}];
+  const rows=data.filter(r=>r.id!=="__meta__"&&r.id!=="__areas__");
+  const codes=new Set(); let maxPos=0;
+  rows.forEach(r=>{ const pj=(r.data&&r.data.project)||""; const m=pj.match(/^\[([^\]]+)\]/); if(m) codes.add(m[1].trim().toUpperCase()); maxPos=Math.max(maxPos,r.pos||0); });
+  return {codes,maxPos,areas};
+}
+function renderReview(jobs,reg){
+  impDetected=jobs;
+  const areaOpts=c=>'<option value="">— unset</option>'+reg.areas.map(a=>'<option value="'+esc(a.code)+'"'+(a.code===c?' selected':'')+'>'+esc(a.code)+' — '+esc(a.label)+'</option>').join("");
+  const missing=jobs.filter(j=>!reg.codes.has(j.code)).length;
+  document.getElementById("impResults").innerHTML=
+    '<table><thead><tr><th style="width:34px"></th><th style="width:140px">Job no.</th><th>Project name</th><th style="width:120px">PO</th><th style="width:170px">Area</th><th style="width:80px"></th></tr></thead><tbody>'
+    +jobs.map((j,i)=>{ const have=reg.codes.has(j.code); const area=areaFor(j.name);
+      return '<tr class="'+(have?'exists':'')+'" data-i="'+i+'">'
+        +'<td><input type="checkbox" class="pick"'+(have?'':' checked')+'></td>'
+        +'<td class="code"><input class="f code" value="'+esc(j.code)+'"></td>'
+        +'<td><input class="f name" value="'+esc(j.name)+'" placeholder="Project name"></td>'
+        +'<td><input class="f po" value="'+esc(j.po)+'"></td>'
+        +'<td><select class="f area">'+areaOpts(reg.areas.some(a=>a.code===area)?area:"")+'</select></td>'
+        +'<td>'+(have?'<span class="tag have">In register</span>':'<span class="tag new">Missing</span>')+'</td></tr>'; }).join("")
+    +'</tbody></table>'
+    +'<div class="imp-foot"><span class="cnt"><b>'+jobs.length+'</b> job number'+(jobs.length===1?'':'s')+' found &middot; <b>'+missing+'</b> missing from the register. Untick anything you don\'t want, fix names if needed, then add.</span>'
+    +'<button class="btn primary" id="impAdd"'+(missing?'':' disabled')+'>Add ticked to register</button></div>';
+  document.getElementById("impAdd").addEventListener("click",()=>addPicked(reg));
+}
+async function addPicked(reg){
+  const trs=[...document.querySelectorAll("#impResults tbody tr")];
+  const picks=[]; const seen=new Set();
+  for(const tr of trs){
+    if(!tr.querySelector(".pick").checked) continue;
+    const code=tr.querySelector(".code").value.trim().toUpperCase();
+    const name=tr.querySelector(".name").value.trim();
+    const po=tr.querySelector(".po").value.trim();
+    const area=tr.querySelector(".area").value;
+    if(!code||seen.has(code)) continue; seen.add(code);
+    if(reg.codes.has(code)){ continue; }                        // never duplicate an existing job
+    picks.push({code,name,po,area});
+  }
+  if(!picks.length){ toast("Nothing new ticked to add"); return; }
+  const btn=document.getElementById("impAdd"); btn.disabled=true; setImpStatus('<span class="spin"></span>Adding '+picks.length+' job'+(picks.length>1?'s':'')+'…');
+  let pos=reg.maxPos; const now=new Date().toISOString();
+  const rows=picks.map(p=>{ pos+=1; const id="imp-"+p.code.replace(/[^A-Z0-9]/gi,"-");
+    const d={id,pos,area:p.area||"",project:"["+p.code+"] "+p.name,desc:"",po:p.po||"",shopModel:"",shopDetail:"",ifaIssued:"",ifaComments:"",ifcIssued:"",manual:"",modelUrl:""};
+    return {id,pos,data:d,updated_at:now}; });
+  const {error}=await sb.from(ITEMS_TABLE).upsert(rows,{onConflict:"id"});
+  if(error){ setImpStatus("Add failed — "+esc(error.message),true); btn.disabled=false; return; }
+  picks.forEach(p=>reg.codes.add(p.code));
+  toast(picks.length+" job"+(picks.length>1?"s":"")+" added to the register");
+  setImpStatus("Added <b>"+picks.length+"</b> — they'll appear in the register as <b>Job Pending</b>. Open the register to fill in progress.");
+  renderReview(impDetected,reg);
+}
+
+document.getElementById("impRead").addEventListener("click",async()=>{
+  const btn=document.getElementById("impRead"); btn.disabled=true;
+  try{
+    let text=document.getElementById("impText").value.trim();
+    if(!text && impImageBlob){ setImpStatus('<span class="spin"></span>Loading OCR engine…'); text=await ocrImage(impImageBlob); document.getElementById("impText").value=text; }
+    if(!text){ setImpStatus("Nothing to read yet — drop a screenshot or paste text first.",true); return; }
+    const jobs=parseJobs(text);
+    if(!jobs.length){ setImpStatus("No job numbers found (looking for the 09-XXXX pattern). If it's a screenshot, try a sharper/larger crop.",true); document.getElementById("impResults").innerHTML=""; return; }
+    setImpStatus('<span class="spin"></span>Checking against the register…');
+    const reg=await loadRegister();
+    renderReview(jobs,reg);
+    const missing=jobs.filter(j=>!reg.codes.has(j.code)).length;
+    setImpStatus(missing?("Found <b>"+missing+"</b> missing job"+(missing>1?"s":"")+". Review below, then add."):"All "+jobs.length+" found jobs are already in the register — nothing to add.");
+  }catch(err){ setImpStatus(esc(err.message||String(err)),true); }
+  finally{ btn.disabled=false; }
+});
+document.getElementById("impClear").addEventListener("click",()=>{
+  impImageBlob=null; impDetected=[]; document.getElementById("impText").value=""; document.getElementById("impResults").innerHTML="";
+  drop.innerHTML='<div><b>Drop a screenshot here</b> or click to choose</div><small>You can also just press Ctrl+V / Cmd+V anywhere on this page to paste one</small><input type="file" id="dropFile" accept="image/*" style="display:none">';
+  document.getElementById("dropFile").addEventListener("change",function(){ if(this.files[0]) showImage(this.files[0]); });
+  setImpStatus("Cleared.");
+});
 </script>
 </body>
 </html>
